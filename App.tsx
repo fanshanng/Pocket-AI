@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -702,6 +702,23 @@ export default function App() {
       },
     })
   ).current;
+  const chatOpenDrawerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (sessionsVisible || settingsVisible || apiProfilesVisible || modelPickerVisible || chatMenuVisible) {
+            return false;
+          }
+          return gestureState.dx > 82 && gestureState.dx > Math.abs(gestureState.dy) * 1.65;
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx > 82 && gestureState.dx > Math.abs(gestureState.dy) * 1.65) {
+            setSessionsVisible(true);
+          }
+        },
+      }),
+    [apiProfilesVisible, chatMenuVisible, modelPickerVisible, sessionsVisible, settingsVisible]
+  );
 
   useEffect(() => {
     (async () => {
@@ -1712,7 +1729,7 @@ export default function App() {
             </>
           )}
 
-          <View style={styles.chatShell}>
+          <View style={styles.chatShell} {...chatOpenDrawerPanResponder.panHandlers}>
             <ScrollView
               ref={scrollRef}
               style={styles.chatScroll}

@@ -42,11 +42,11 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Assistant output streams into the active message in real time where the provider/runtime supports SSE streaming.
 - Assistant replies can include downloaded image/document URL attachments when links appear in provider output.
 - Android can receive images from the system share sheet and split-screen drag/drop; received image URIs are copied through the existing attachment pipeline into the pending composer queue.
-- The sessions modal supports local search, rename, delete, and Markdown copy export.
-- The sessions and settings modals close by tapping the dimmed backdrop; the sessions modal no longer has a bottom `Done` button.
+- The left session drawer supports local search, rename, delete, and Markdown copy export.
+- The chat screen opens the left session/settings drawer with a right swipe or the top-left menu button; the drawer itself closes back to chat with a right swipe.
+- Settings is now a full-screen left-panel flow: subpages return to the root settings directory with a right swipe, and the root settings directory closes back to chat with a left swipe.
 - Settings language selection is an option-list style control and updates/persists immediately; settings no longer has bottom close/save actions.
 - Settings includes a quiet About area with fanshanng GitHub/blog/email links.
-- Settings/API/session modals use a separate dimmed dismiss area above the card so Android vertical scrolling inside the card is less likely to be stolen by the backdrop.
 - API profile reasoning effort chips only show common choices (`high`, `xhigh`); other valid values can be typed and are applied when recognized. Invalid typed values show a short inline warning.
 - Common API errors are mapped into clearer user-facing tips for auth, model/endpoint mismatch, rate limits, timeout, network failure, and provider 5xx errors.
 - Formal local release signing is configured. Release builds read `android/keystore.properties` and use `android/keystore/pocket-ai-release.keystore`; release no longer uses `debug.keystore`.
