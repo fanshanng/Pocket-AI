@@ -29,9 +29,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - `responses` for OpenAI Responses API, appends `/responses`.
   - `chatCompletions` for DeepSeek/OpenAI-compatible Chat Completions, appends `/chat/completions`.
 - DeepSeek preset uses `https://api.deepseek.com` and `deepseek-v4-flash`.
-- Message bubbles have a compact copy-only action; copy success changes the icon to a small check mark without a popup.
 - Message copy success uses a blue filled check icon without a popup.
-- Common LaTeX-style cryptography/math tokens such as `\times`, `\phi`, `\equiv`, `\mod`, and simple superscripts render as readable symbols while copied text stays original.
+- Common LaTeX-style cryptography/math tokens such as `\times`, `\phi`, `\equiv`, `\mod`, `\oplus`, `\land`, `\Sigma_0`, `\ggg`, `cases`, and `aligned` render as readable symbols while copied text stays original.
 - Credential-like text such as passwords, API keys, tokens, commands, paths, and URLs renders as a monospace horizontal block.
 - Composer avoids Android keyboard overlap better with `KeyboardAvoidingView`.
 - In-flight requests can be aborted by pressing the stop button.

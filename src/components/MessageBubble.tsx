@@ -116,10 +116,61 @@ function normalizeLatexMathText(text: string): string {
     x: 'ˣ',
     y: 'ʸ',
   };
+  const subscripts: Record<string, string> = {
+    '0': '₀',
+    '1': '₁',
+    '2': '₂',
+    '3': '₃',
+    '4': '₄',
+    '5': '₅',
+    '6': '₆',
+    '7': '₇',
+    '8': '₈',
+    '9': '₉',
+    '+': '₊',
+    '-': '₋',
+    '=': '₌',
+    '(': '₍',
+    ')': '₎',
+    a: 'ₐ',
+    e: 'ₑ',
+    h: 'ₕ',
+    i: 'ᵢ',
+    j: 'ⱼ',
+    k: 'ₖ',
+    l: 'ₗ',
+    m: 'ₘ',
+    n: 'ₙ',
+    o: 'ₒ',
+    p: 'ₚ',
+    r: 'ᵣ',
+    s: 'ₛ',
+    t: 'ₜ',
+    u: 'ᵤ',
+    v: 'ᵥ',
+    x: 'ₓ',
+  };
+
+  const toScript = (value: string, map: Record<string, string>) =>
+    value
+      .split('')
+      .map((char) => map[char] ?? char)
+      .join('');
+
   const replacements: Array<[RegExp, string]> = [
+    [/\\oplus\b/g, '⊕'],
+    [/\\otimes\b/g, '⊗'],
+    [/\\land\b/g, '∧'],
+    [/\\lor\b/g, '∨'],
+    [/\\lnot\b/g, '¬'],
+    [/\\not\b/g, '¬'],
+    [/\\neg\b/g, '¬'],
+    [/\\xor\b/g, '⊕'],
     [/\\times\b/g, '×'],
     [/\\cdot\b/g, '·'],
     [/\\div\b/g, '÷'],
+    [/\\Sigma\b/g, 'Σ'],
+    [/\\sigma\b/g, 'σ'],
     [/\\phi\b/g, 'φ'],
     [/\\varphi\b/g, 'φ'],
     [/\\Phi\b/g, 'Φ'],
@@ -131,40 +182,46 @@ function normalizeLatexMathText(text: string): string {
     [/\\gt\b/g, '>'],
     [/\\pm\b/g, '±'],
     [/\\infty\b/g, '∞'],
+    [/\\ggg\b/g, '>>>'],
+    [/\\gg\b/g, '>>'],
+    [/\\ll\b/g, '<<'],
     [/\\mod\b/g, 'mod'],
     [/\\pmod\s*\{([^}]+)\}/g, '(mod $1)'],
     [/\\left\s*/g, ''],
     [/\\right\s*/g, ''],
+    [/\\begin\s*\{(?:cases|aligned|align|array|split|gathered)\}/g, ''],
+    [/\\end\s*\{(?:cases|aligned|align|array|split|gathered)\}/g, ''],
+    [/\\begin(?:cases|aligned|align|array|split|gathered)\b/g, ''],
+    [/\\end(?:cases|aligned|align|array|split|gathered)\b/g, ''],
     [/\\,/g, ' '],
     [/\\;/g, ' '],
     [/\\:/g, ' '],
-    [/\\\s/g, ' '],
+    [/\\[ \t]/g, ' '],
   ];
 
   let normalized = text
     .replace(/\$\$([^$]+)\$\$/g, '$1')
     .replace(/\$([^$\n]+)\$/g, '$1')
     .replace(/\\\((.*?)\\\)/g, '$1')
-    .replace(/\\\[(.*?)\\\]/gs, '$1');
+    .replace(/\\\[(.*?)\\\]/gs, '$1')
+    .replace(/\\text\s*\{([^{}]*)\}/g, '$1')
+    .replace(/\\text([A-Za-z\u4e00-\u9fff]+)/g, '$1')
+    .replace(/\\\\[ \t]*/g, '\n');
 
   for (const [pattern, value] of replacements) {
     normalized = normalized.replace(pattern, value);
   }
 
   return normalized
-    .replace(/\^\{([^{}]{1,8})\}/g, (_, value: string) =>
-      value
-        .split('')
-        .map((char) => superscripts[char] ?? char)
-        .join('')
-    )
-    .replace(/\^([0-9a-zA-Z()+-=]{1,4})/g, (_, value: string) =>
-      value
-        .split('')
-        .map((char) => superscripts[char] ?? char)
-        .join('')
-    )
+    .replace(/\^\{([^{}]{1,8})\}/g, (_, value: string) => toScript(value, superscripts))
+    .replace(/\^([0-9a-zA-Z])/g, (_, value: string) => toScript(value, superscripts))
+    .replace(/_\{([^{}]{1,8})\}/g, (_, value: string) => toScript(value, subscripts))
+    .replace(/_([0-9a-zA-Z])/g, (_, value: string) => toScript(value, subscripts))
+    .replace(/\s*&=\s*/g, ' = ')
+    .replace(/\s*&\s*/g, '  |  ')
+    .replace(/\s*\\\s*/g, ' ')
     .replace(/\{([^{}]+)\}/g, '$1')
+    .replace(/\n[ \t]+/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n');
 }
