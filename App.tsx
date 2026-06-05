@@ -15,6 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MessageBubble } from './src/components/MessageBubble';
@@ -43,7 +44,12 @@ import {
   MODEL_SUGGESTIONS,
   REASONING_EFFORT_OPTIONS,
 } from './src/lib/models';
-import { createAssistantTurn } from './src/lib/openai';
+import {
+  createAssistantTurn,
+  getApiErrorMessage,
+  getApiErrorStatus,
+  testApiConnection,
+} from './src/lib/openai';
 import {
   clearPersistedState,
   deleteApiKey,
@@ -83,6 +89,11 @@ type LanguageCopy = {
   deleteApiProfileTitle: string;
   deleteApiProfileMessage: string;
   cannotDeleteOnlyApiProfile: string;
+  testApiConnection: string;
+  testingApiConnection: string;
+  testConnectionSuccessTitle: string;
+  testConnectionSuccessMessage: (latencyMs: number, endpoint: string, sampleText: string) => string;
+  testConnectionFailedTitle: string;
   privacySection: string;
   localStorageTitle: string;
   localStorageDescription: string;
@@ -120,6 +131,13 @@ type LanguageCopy = {
   saving: string;
   sessionsTitle: string;
   sessionsEmpty: string;
+  sessionSearchPlaceholder: string;
+  sessionsNoMatches: string;
+  renameSession: string;
+  renameSessionTitle: string;
+  renameSessionPlaceholder: string;
+  exportSession: string;
+  copiedSessionExport: string;
   done: string;
   delete: string;
   deleteSessionTitle: string;
@@ -147,6 +165,15 @@ type LanguageCopy = {
   sendFailed: string;
   stopGenerating: string;
   generationStopped: string;
+  apiErrorNetwork: string;
+  apiErrorUnauthorized: string;
+  apiErrorForbidden: string;
+  apiErrorNotFound: string;
+  apiErrorRateLimited: string;
+  apiErrorBadRequest: string;
+  apiErrorServer: string;
+  apiErrorTimeout: string;
+  apiErrorRawPrefix: string;
   clearFailed: string;
   clearFailedFallback: string;
   loading: string;
@@ -182,6 +209,12 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     deleteApiProfileTitle: '删除 API 配置？',
     deleteApiProfileMessage: '这会删除该配置和它保存的 API key，不会删除聊天记录。',
     cannotDeleteOnlyApiProfile: '至少需要保留一个 API 配置。',
+    testApiConnection: '测试连接',
+    testingApiConnection: '测试中...',
+    testConnectionSuccessTitle: '连接可用',
+    testConnectionSuccessMessage: (latencyMs, endpoint, sampleText) =>
+      `接口已响应，用时 ${latencyMs}ms。\n\n${endpoint}${sampleText ? `\n\n返回示例：${sampleText}` : ''}`,
+    testConnectionFailedTitle: '连接测试失败',
     privacySection: '隐私与本地数据',
     localStorageTitle: '聊天记录保存位置',
     localStorageDescription:
@@ -221,6 +254,13 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     saving: '保存中...',
     sessionsTitle: '会话',
     sessionsEmpty: '还没有保存的会话。',
+    sessionSearchPlaceholder: '搜索会话或消息...',
+    sessionsNoMatches: '没有匹配的会话。',
+    renameSession: '重命名',
+    renameSessionTitle: '重命名会话',
+    renameSessionPlaceholder: '输入新的会话名称',
+    exportSession: '复制导出',
+    copiedSessionExport: '已复制为 Markdown。',
     done: '完成',
     delete: '删除',
     deleteSessionTitle: '删除会话？',
@@ -248,6 +288,15 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     sendFailed: '发送失败',
     stopGenerating: '停止生成',
     generationStopped: '已停止生成。',
+    apiErrorNetwork: '网络请求失败。请检查手机网络、Base URL、代理或网关证书。',
+    apiErrorUnauthorized: '鉴权失败。请检查 API key 是否正确，是否属于当前服务商或项目。',
+    apiErrorForbidden: '当前账号或项目没有权限访问这个模型/接口。',
+    apiErrorNotFound: '接口或模型不存在。请检查 Base URL、接口类型和模型名称。',
+    apiErrorRateLimited: '请求过于频繁或额度不足。请稍后重试，或检查账号额度。',
+    apiErrorBadRequest: '请求参数不兼容。请检查接口类型、模型名称、附件类型和推理强度。',
+    apiErrorServer: '服务端暂时不可用。请稍后重试，或切换到其他配置。',
+    apiErrorTimeout: '请求超时。请检查网络，或换用更快的模型/网关。',
+    apiErrorRawPrefix: '原始错误',
     clearFailed: '清空失败',
     clearFailedFallback: '无法清空本地数据。',
     loading: '正在载入本地聊天数据...',
@@ -272,6 +321,12 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     deleteApiProfileTitle: 'Delete API profile?',
     deleteApiProfileMessage: 'This deletes the profile and its saved API key, but keeps chat history.',
     cannotDeleteOnlyApiProfile: 'Keep at least one API profile.',
+    testApiConnection: 'Test connection',
+    testingApiConnection: 'Testing...',
+    testConnectionSuccessTitle: 'Connection works',
+    testConnectionSuccessMessage: (latencyMs, endpoint, sampleText) =>
+      `Endpoint responded in ${latencyMs}ms.\n\n${endpoint}${sampleText ? `\n\nSample: ${sampleText}` : ''}`,
+    testConnectionFailedTitle: 'Connection test failed',
     privacySection: 'Privacy & Local Data',
     localStorageTitle: 'Where chats are stored',
     localStorageDescription:
@@ -311,6 +366,13 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     saving: 'Saving...',
     sessionsTitle: 'Sessions',
     sessionsEmpty: 'No saved sessions yet.',
+    sessionSearchPlaceholder: 'Search sessions or messages...',
+    sessionsNoMatches: 'No matching sessions.',
+    renameSession: 'Rename',
+    renameSessionTitle: 'Rename session',
+    renameSessionPlaceholder: 'Enter a new session name',
+    exportSession: 'Copy export',
+    copiedSessionExport: 'Copied as Markdown.',
     done: 'Done',
     delete: 'Delete',
     deleteSessionTitle: 'Delete session?',
@@ -338,6 +400,15 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     sendFailed: 'Send failed',
     stopGenerating: 'Stop generating',
     generationStopped: 'Generation stopped.',
+    apiErrorNetwork: 'Network request failed. Check phone connectivity, Base URL, proxy, or gateway certificate.',
+    apiErrorUnauthorized: 'Authentication failed. Check that the API key matches this provider and project.',
+    apiErrorForbidden: 'This account or project cannot access the selected model or endpoint.',
+    apiErrorNotFound: 'Endpoint or model not found. Check Base URL, endpoint mode, and model name.',
+    apiErrorRateLimited: 'Too many requests or insufficient quota. Try later or check account quota.',
+    apiErrorBadRequest: 'Request parameters are incompatible. Check endpoint mode, model name, attachments, and reasoning effort.',
+    apiErrorServer: 'The provider is temporarily unavailable. Try later or switch profiles.',
+    apiErrorTimeout: 'Request timed out. Check the network, or use a faster model/gateway.',
+    apiErrorRawPrefix: 'Raw error',
     clearFailed: 'Clear failed',
     clearFailedFallback: 'Unable to clear local data.',
     loading: 'Loading local chat vault...',
@@ -422,6 +493,66 @@ function applyApiPreset(profile: ApiProfile, preset: (typeof API_PRESETS)[number
   };
 }
 
+function normalizeSearchText(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function conversationMatchesQuery(conversation: ConversationRecord, query: string): boolean {
+  if (!query) {
+    return true;
+  }
+
+  const searchable = [
+    conversation.title,
+    conversation.model,
+    ...conversation.messages.map((message) => message.text),
+    ...conversation.messages.flatMap((message) => message.attachments.map((attachment) => attachment.name)),
+  ]
+    .join('\n')
+    .toLowerCase();
+
+  return searchable.includes(query);
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+function formatConversationMarkdown(conversation: ConversationRecord): string {
+  const lines = [
+    `# ${conversation.title}`,
+    '',
+    `- Model: ${conversation.model}`,
+    `- Created: ${formatDateTime(conversation.createdAt)}`,
+    `- Updated: ${formatDateTime(conversation.updatedAt)}`,
+    '',
+  ];
+
+  for (const message of conversation.messages) {
+    lines.push(`## ${message.role === 'user' ? 'User' : 'Assistant'} - ${formatDateTime(message.createdAt)}`);
+    lines.push('');
+    lines.push(message.text.trim() || '(empty)');
+    if (message.error) {
+      lines.push('');
+      lines.push(`Error: ${message.error}`);
+    }
+    if (message.attachments.length > 0) {
+      lines.push('');
+      lines.push('Attachments:');
+      for (const attachment of message.attachments) {
+        lines.push(`- ${attachment.kind}: ${attachment.name}`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
 export default function App() {
   const scrollRef = useRef<ScrollView>(null);
   const skipNextPersistRef = useRef(false);
@@ -436,10 +567,14 @@ export default function App() {
   const [composerText, setComposerText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [testingProfile, setTestingProfile] = useState(false);
   const [sending, setSending] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [sessionsVisible, setSessionsVisible] = useState(false);
   const [apiProfilesVisible, setApiProfilesVisible] = useState(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
+  const [draftSessionTitle, setDraftSessionTitle] = useState('');
 
   const uiLanguage = persisted.uiLanguage;
   const copy = COPY[uiLanguage];
@@ -447,6 +582,12 @@ export default function App() {
   const activeConversation =
     persisted.conversations.find((item) => item.id === persisted.activeConversationId) ?? null;
   const activeSessionTitle = activeConversation?.title || copy.noSession;
+  const normalizedSessionSearch = normalizeSearchText(sessionSearchQuery);
+  const visibleConversations = persisted.conversations.filter((conversation) =>
+    conversationMatchesQuery(conversation, normalizedSessionSearch)
+  );
+  const renamingConversation =
+    persisted.conversations.find((conversation) => conversation.id === renamingConversationId) ?? null;
 
   useEffect(() => {
     (async () => {
@@ -610,6 +751,63 @@ export default function App() {
       setApiProfilesVisible(false);
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  function formatApiError(error: unknown): string {
+    const status = getApiErrorStatus(error);
+    const rawMessage = getApiErrorMessage(error);
+    const lowered = rawMessage.toLowerCase();
+    let friendly = '';
+
+    if (status === 401) {
+      friendly = copy.apiErrorUnauthorized;
+    } else if (status === 403) {
+      friendly = copy.apiErrorForbidden;
+    } else if (status === 404) {
+      friendly = copy.apiErrorNotFound;
+    } else if (status === 400 || status === 422) {
+      friendly = copy.apiErrorBadRequest;
+    } else if (status === 429) {
+      friendly = copy.apiErrorRateLimited;
+    } else if (status && status >= 500) {
+      friendly = copy.apiErrorServer;
+    } else if (lowered.includes('timeout') || lowered.includes('timed out')) {
+      friendly = copy.apiErrorTimeout;
+    } else if (
+      lowered.includes('network request failed') ||
+      lowered.includes('failed to fetch') ||
+      lowered.includes('network')
+    ) {
+      friendly = copy.apiErrorNetwork;
+    }
+
+    if (!friendly) {
+      return rawMessage;
+    }
+
+    return `${friendly}\n\n${copy.apiErrorRawPrefix}: ${rawMessage}`;
+  }
+
+  async function handleTestApiProfile() {
+    const profile = sanitizeProfile(draftProfile);
+    const key = apiKey.trim();
+    if (!key) {
+      Alert.alert(copy.apiKeyRequiredTitle, copy.apiKeyRequiredMessage);
+      return;
+    }
+
+    setTestingProfile(true);
+    try {
+      const result = await testApiConnection({ profile, apiKey: key });
+      Alert.alert(
+        copy.testConnectionSuccessTitle,
+        copy.testConnectionSuccessMessage(result.latencyMs, result.endpoint, result.sampleText)
+      );
+    } catch (error) {
+      Alert.alert(copy.testConnectionFailedTitle, formatApiError(error));
+    } finally {
+      setTestingProfile(false);
     }
   }
 
@@ -819,7 +1017,7 @@ export default function App() {
         return;
       }
 
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = formatApiError(error);
       const failedConversation: ConversationRecord = {
         ...optimisticConversation,
         updatedAt: new Date().toISOString(),
@@ -862,6 +1060,45 @@ export default function App() {
       activeConversationId: conversationId,
     }));
     setSessionsVisible(false);
+  }
+
+  function renameConversation(conversationId: string, title: string) {
+    const nextTitle = trimTitle(title, copy.newSession);
+    setPersisted((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              title: nextTitle,
+              updatedAt: new Date().toISOString(),
+            }
+          : conversation
+      ),
+    }));
+  }
+
+  function promptRenameConversation(conversation: ConversationRecord) {
+    setRenamingConversationId(conversation.id);
+    setDraftSessionTitle(conversation.title);
+  }
+
+  function closeRenameModal() {
+    setRenamingConversationId(null);
+    setDraftSessionTitle('');
+  }
+
+  function saveRenamedConversation() {
+    if (!renamingConversationId) {
+      return;
+    }
+    renameConversation(renamingConversationId, draftSessionTitle);
+    closeRenameModal();
+  }
+
+  async function copyConversationExport(conversation: ConversationRecord) {
+    await Clipboard.setStringAsync(formatConversationMarkdown(conversation));
+    Alert.alert(copy.exportSession, copy.copiedSessionExport);
   }
 
   async function deleteConversation(conversationId: string) {
@@ -1382,12 +1619,24 @@ export default function App() {
               />
               <Text style={styles.inlineHint}>{copy.advancedConfigHint}</Text>
 
-              <Pressable
-                style={styles.dangerButtonCompact}
-                onPress={() => confirmDeleteApiProfile(draftProfile.id)}
-              >
-                <Text style={styles.dangerButtonText}>{copy.deleteApiProfile}</Text>
-              </Pressable>
+              <View style={styles.profileUtilityRow}>
+                <Pressable
+                  style={[styles.secondaryActionCard, testingProfile && styles.disabledAction]}
+                  onPress={handleTestApiProfile}
+                  disabled={testingProfile || savingProfile}
+                >
+                  <Text style={styles.secondaryActionLabel}>
+                    {testingProfile ? copy.testingApiConnection : copy.testApiConnection}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.dangerButtonCompact}
+                  onPress={() => confirmDeleteApiProfile(draftProfile.id)}
+                  disabled={testingProfile || savingProfile}
+                >
+                  <Text style={styles.dangerButtonText}>{copy.deleteApiProfile}</Text>
+                </Pressable>
+              </View>
             </ScrollView>
 
             <View style={styles.modalActions}>
@@ -1411,11 +1660,20 @@ export default function App() {
                 <Text style={styles.modalPrimaryText}>{copy.newSession}</Text>
               </Pressable>
             </View>
+            <TextInput
+              value={sessionSearchQuery}
+              onChangeText={setSessionSearchQuery}
+              style={[styles.fieldInput, styles.sessionSearchInput]}
+              placeholder={copy.sessionSearchPlaceholder}
+              placeholderTextColor="#9BA7B7"
+            />
             <ScrollView style={styles.modalScroll}>
               {persisted.conversations.length === 0 ? (
                 <Text style={styles.emptySessionText}>{copy.sessionsEmpty}</Text>
+              ) : visibleConversations.length === 0 ? (
+                <Text style={styles.emptySessionText}>{copy.sessionsNoMatches}</Text>
               ) : (
-                persisted.conversations.map((conversation) => (
+                visibleConversations.map((conversation) => (
                   <View key={conversation.id} style={styles.sessionItem}>
                     <Pressable style={styles.sessionMeta} onPress={() => openConversation(conversation.id)}>
                       <Text style={styles.sessionTitle}>{conversation.title}</Text>
@@ -1427,9 +1685,21 @@ export default function App() {
                         )}
                       </Text>
                     </Pressable>
-                    <Pressable onPress={() => confirmDeleteConversation(conversation.id)}>
-                      <Text style={styles.deleteText}>{copy.delete}</Text>
-                    </Pressable>
+                    <View style={styles.sessionActions}>
+                      <Pressable onPress={() => promptRenameConversation(conversation)}>
+                        <Text style={styles.sessionActionText}>{copy.renameSession}</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          void copyConversationExport(conversation);
+                        }}
+                      >
+                        <Text style={styles.sessionActionText}>{copy.exportSession}</Text>
+                      </Pressable>
+                      <Pressable onPress={() => confirmDeleteConversation(conversation.id)}>
+                        <Text style={styles.deleteText}>{copy.delete}</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 ))
               )}
@@ -1437,6 +1707,30 @@ export default function App() {
             <View style={styles.modalActions}>
               <Pressable style={styles.modalGhost} onPress={() => setSessionsVisible(false)}>
                 <Text style={styles.modalGhostText}>{copy.done}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!renamingConversation} animationType="fade" transparent>
+        <View style={styles.modalBackdropCentered}>
+          <View style={styles.renameCard}>
+            <Text style={styles.modalTitle}>{copy.renameSessionTitle}</Text>
+            <TextInput
+              value={draftSessionTitle}
+              onChangeText={setDraftSessionTitle}
+              style={[styles.fieldInput, styles.renameInput]}
+              placeholder={copy.renameSessionPlaceholder}
+              placeholderTextColor="#9BA7B7"
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalGhost} onPress={closeRenameModal}>
+                <Text style={styles.modalGhostText}>{copy.cancel}</Text>
+              </Pressable>
+              <Pressable style={styles.modalPrimary} onPress={saveRenamedConversation}>
+                <Text style={styles.modalPrimaryText}>{copy.save}</Text>
               </Pressable>
             </View>
           </View>
@@ -1637,6 +1931,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'flex-end',
   },
+  modalBackdropCentered: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
   modalCard: {
     maxHeight: '92%',
     backgroundColor: '#FFFFFF',
@@ -1692,6 +1992,20 @@ const styles = StyleSheet.create({
   fieldInputMultiline: {
     minHeight: 96,
     textAlignVertical: 'top',
+  },
+  sessionSearchInput: {
+    marginTop: 16,
+  },
+  renameInput: {
+    marginTop: 16,
+  },
+  renameCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -1895,6 +2209,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
+  profileUtilityRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
   dangerButtonText: {
     color: '#B91C1C',
     fontSize: 13,
@@ -1954,6 +2273,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  sessionActions: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 10,
+  },
   sessionMeta: {
     flex: 1,
   },
@@ -1970,6 +2294,11 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sessionActionText: {
+    color: '#2563EB',
     fontSize: 13,
     fontWeight: '700',
   },

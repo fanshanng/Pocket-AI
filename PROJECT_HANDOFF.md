@@ -22,6 +22,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Multiple API profiles are supported.
 - Each API profile has its own API key in SecureStore.
 - In the API profile modal, `Done` saves the edited profile and applies it as the active chat backend automatically.
+- API profile modal has a `Test connection` action that sends a tiny request to validate API key, Base URL, endpoint mode, and model.
 - Settings explains where chat records are stored.
 - Existing single-profile API data migrates into the default profile.
 - API profiles now include an endpoint mode:
@@ -35,6 +36,8 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Assistant output streams into the active message in real time where the provider/runtime supports SSE streaming.
 - Assistant replies can include downloaded image/document URL attachments when links appear in provider output.
 - Android can receive images from the system share sheet and split-screen drag/drop; received image URIs are copied through the existing attachment pipeline into the pending composer queue.
+- The sessions modal supports local search, rename, delete, and Markdown copy export.
+- Common API errors are mapped into clearer user-facing tips for auth, model/endpoint mismatch, rate limits, timeout, network failure, and provider 5xx errors.
 
 ## Key Files
 
@@ -49,6 +52,8 @@ This file is for starting a fresh Codex conversation without losing project cont
 - `src/lib/openai.ts`
   - OpenAI Responses request construction and response parsing.
   - DeepSeek / Chat Completions request construction and response parsing.
+  - Lightweight API connection test helper.
+  - Shared API request error type with HTTP status metadata.
   - Accepts an optional `AbortSignal` so generation can be stopped.
   - Accepts `onTextDelta` for real-time streaming text updates.
   - Collects downloadable image/document URLs from assistant output and saves them as attachments.
@@ -104,21 +109,17 @@ Project ID and Organization are OpenAI account/project routing headers and shoul
 
 Recommended next tasks:
 
-1. API profile test button.
-   Add a test action in the API profile modal to validate API key, endpoint mode, Base URL, and model name before chatting.
-2. Split `App.tsx`.
+1. Split `App.tsx`.
    Extract `ChatScreen`, `Composer`, `SettingsModal`, `ApiProfilesModal`, `SessionsModal`, `useChatState`, and `useApiProfiles`.
-3. Rich generated files.
+2. Rich generated files.
    Add provider-specific image generation and PDF/DOCX export. Current support covers downloaded image/document URLs only.
-4. Conversation management.
-   Add rename, search, pin, batch delete, and full conversation export.
-5. Context management.
+3. Conversation management.
+   Add pin, batch delete, import, and share-sheet export.
+4. Context management.
    Add recent-message windows, automatic old-message summaries, and per-provider token/attachment limits.
-6. Provider capability flags.
+5. Provider capability flags.
    Track whether a profile supports Responses chaining, images, files, system prompts, and thinking/reasoning parameters.
-7. Better errors.
-   Translate common API failures like 401, 404, 429, timeout, and incompatible JSON shape into clear Chinese/English messages.
-8. Security polish.
+6. Security polish.
    Add app lock / biometric unlock, encrypted backup/restore, and real release signing before final distribution.
 
 ## Validation Commands

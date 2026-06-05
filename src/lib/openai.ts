@@ -33,11 +33,51 @@ type RequestOptions = {
   onTextDelta?: (delta: string) => void;
 };
 
+type ApiErrorDetails = {
+  status?: number;
+  message: string;
+  code?: string;
+  type?: string;
+};
+
 type ResponseTurn = {
   assistantText: string;
   responseId: string;
   attachments: AttachmentRecord[];
 };
+
+export type ApiConnectionTestResult = {
+  endpoint: string;
+  model: string;
+  latencyMs: number;
+  responseId: string;
+  sampleText: string;
+};
+
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+  type?: string;
+
+  constructor(details: ApiErrorDetails) {
+    super(details.message);
+    this.name = 'ApiRequestError';
+    this.status = details.status;
+    this.code = details.code;
+    this.type = details.type;
+  }
+}
+
+export function getApiErrorStatus(error: unknown): number | undefined {
+  return error instanceof ApiRequestError ? error.status : undefined;
+}
+
+export function getApiErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return 'Unknown error';
+}
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
@@ -299,10 +339,24 @@ async function requestJson(url: string, init: RequestInit): Promise<any> {
   const response = await expoFetch(url, init);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new ApiRequestError(parseApiError(response.status, payload));
   }
   return payload;
+}
+
+function parseApiError(status: number | undefined, payload: any): ApiErrorDetails {
+  const errorPayload = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
+  const message =
+    (typeof errorPayload?.message === 'string' && errorPayload.message.trim()) ||
+    (typeof payload?.message === 'string' && payload.message.trim()) ||
+    (status ? `HTTP ${status}` : 'Request failed');
+
+  return {
+    status,
+    message,
+    code: typeof errorPayload?.code === 'string' ? errorPayload.code : undefined,
+    type: typeof errorPayload?.type === 'string' ? errorPayload.type : undefined,
+  };
 }
 
 function appendSseChunk(buffer: string, chunk: string): string {
@@ -368,8 +422,7 @@ async function requestStream(
   const response = await expoFetch(url, init);
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
+    throw new ApiRequestError(parseApiError(response.status, payload));
   }
 
   const reader = response.body?.getReader();
@@ -413,6 +466,72 @@ async function requestStream(
   }
 
   return { text, id, finalPayload };
+}
+
+export async function testApiConnection(options: {
+  profile: ApiProfile;
+  apiKey: string;
+  timeoutMs?: number;
+}): Promise<ApiConnectionTestResult> {
+  const { profile, apiKey, timeoutMs = 15000 } = options;
+  const headers = buildHeaders(profile, apiKey);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+
+  try {
+    if (profile.apiProtocol === 'chatCompletions') {
+      const endpoint = `${normalizeBaseUrl(profile.baseUrl)}/chat/completions`;
+      const payload = await requestJson(endpoint, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: profile.model.trim(),
+          messages: [{ role: 'user', content: 'Reply with OK.' }],
+          stream: false,
+          max_tokens: 16,
+        }),
+      });
+
+      return {
+        endpoint,
+        model: profile.model.trim(),
+        latencyMs: Date.now() - startedAt,
+        responseId: typeof payload?.id === 'string' ? payload.id : '',
+        sampleText: extractChatCompletionAssistantText(payload),
+      };
+    }
+
+    const endpoint = `${normalizeBaseUrl(profile.baseUrl)}/responses`;
+    const payload = await requestJson(endpoint, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: profile.model.trim(),
+        input: 'Reply with OK.',
+        stream: false,
+        store: false,
+        max_output_tokens: 16,
+      }),
+    });
+
+    return {
+      endpoint,
+      model: profile.model.trim(),
+      latencyMs: Date.now() - startedAt,
+      responseId: typeof payload?.id === 'string' ? payload.id : '',
+      sampleText: extractResponsesAssistantText(payload),
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiRequestError({ message: `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.` });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function createAssistantTurn(options: RequestOptions): Promise<ResponseTurn> {
