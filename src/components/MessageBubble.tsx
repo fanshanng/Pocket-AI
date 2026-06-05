@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 import { applyContentPlugins } from '../plugins';
@@ -10,6 +10,10 @@ type Props = {
   message: ChatMessage;
   language: UiLanguage;
 };
+
+type RichTextSegment =
+  | { kind: 'markdown'; text: string }
+  | { kind: 'formula'; text: string };
 
 function AttachmentPreview({ attachment, language }: { attachment: AttachmentRecord; language: UiLanguage }) {
   if (attachment.kind === 'image') {
@@ -111,6 +115,83 @@ function normalizeMarkdownText(text: string): string {
   return normalized;
 }
 
+function looksLikeFormulaLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 4) {
+    return false;
+  }
+
+  if (/^(```|~~~|#{1,6}\s|[-*+]\s|\d+\.\s|>\s)/.test(trimmed)) {
+    return false;
+  }
+
+  if (/[\u4e00-\u9fff]/.test(trimmed)) {
+    return false;
+  }
+
+  const mathTokenCount = (trimmed.match(/[=~∼≤≥≠≈∈∞√∫∑∏πσμθλφΦαβγ𝒩ℝℕℤℚℂ]|exp|sin|cos|tan|log|ln|lim|P\(|f\(|F\(|N\(/g) ?? []).length;
+  const asciiMathOnly = /^[A-Za-z0-9\s.,;:(){}\[\]+\-*/=<>^_≤≥≠≈∈∞√∫∑∏πσμθλφΦαβγ𝒩ℝℕℤℚℂ₀-₉⁰-⁹⁺⁻⁼⁽⁾]+$/.test(trimmed);
+  return asciiMathOnly && mathTokenCount >= 2;
+}
+
+function formatFormulaText(text: string): string {
+  return text
+    .trim()
+    .replace(/\((1)\)\/\(/g, '$1 / (')
+    .replace(/\)\s*exp/g, ') · exp')
+    .replace(/([A-Za-z0-9)\]²³])=([A-Za-z0-9(])/g, '$1 = $2')
+    .replace(/([A-Za-z0-9)\]²³])([≤≥≠≈∈])([A-Za-z0-9(])/g, '$1 $2 $3')
+    .replace(/\s*\+\s*/g, ' + ')
+    .replace(/\s*-\s*/g, ' - ')
+    .replace(/\s*\/\s*/g, ' / ')
+    .replace(/,\s*/g, ', ')
+    .replace(/\s{2,}/g, ' ');
+}
+
+function splitRichText(text: string): RichTextSegment[] {
+  const segments: RichTextSegment[] = [];
+  const codeFencePattern = /(```[\s\S]*?```|~~~[\s\S]*?~~~)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  function pushMarkdown(value: string) {
+    const compact = value.replace(/\n{3,}/g, '\n\n').trim();
+    if (compact) {
+      segments.push({ kind: 'markdown', text: compact });
+    }
+  }
+
+  function pushTextRun(value: string) {
+    const lines = value.split('\n');
+    const markdownLines: string[] = [];
+
+    function flushMarkdownLines() {
+      pushMarkdown(markdownLines.join('\n'));
+      markdownLines.length = 0;
+    }
+
+    for (const line of lines) {
+      if (looksLikeFormulaLine(line)) {
+        flushMarkdownLines();
+        segments.push({ kind: 'formula', text: formatFormulaText(line) });
+      } else {
+        markdownLines.push(line);
+      }
+    }
+
+    flushMarkdownLines();
+  }
+
+  while ((match = codeFencePattern.exec(text))) {
+    pushTextRun(text.slice(cursor, match.index));
+    pushMarkdown(match[0]);
+    cursor = match.index + match[0].length;
+  }
+
+  pushTextRun(text.slice(cursor));
+  return segments;
+}
+
 function CodeBlock({
   code,
   language,
@@ -160,22 +241,23 @@ function CodeBlock({
   );
 }
 
-function MessageText({ message, isUser, language }: { message: ChatMessage; isUser: boolean; language: UiLanguage }) {
-  if (!message.text) {
-    return null;
-  }
+function FormulaBlock({ formula }: { formula: string }) {
+  return (
+    <View style={styles.formulaBlock}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.formulaScrollContent}
+      >
+        <Text selectable style={styles.formulaText}>
+          {formula}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
 
-  const normalizedText = normalizeMarkdownText(message.text);
-  const displayText = applyContentPlugins(normalizedText, { message, language, isUser });
-
-  if (shouldUseTechnicalTextBlock(displayText)) {
-    return <TechnicalTextBlock text={displayText} />;
-  }
-
-  if (isUser) {
-    return <Text selectable style={styles.bodyText}>{displayText}</Text>;
-  }
-
+function MarkdownSegment({ text, language }: { text: string; language: UiLanguage }) {
   return (
     <Markdown
       mergeStyle
@@ -193,8 +275,38 @@ function MessageText({ message, isUser, language }: { message: ChatMessage; isUs
       }}
       style={markdownStyles}
     >
-      {displayText}
+      {text}
     </Markdown>
+  );
+}
+
+function MessageText({ message, isUser, language }: { message: ChatMessage; isUser: boolean; language: UiLanguage }) {
+  if (!message.text) {
+    return null;
+  }
+
+  const normalizedText = normalizeMarkdownText(message.text);
+  const displayText = applyContentPlugins(normalizedText, { message, language, isUser });
+
+  if (shouldUseTechnicalTextBlock(displayText)) {
+    return <TechnicalTextBlock text={displayText} />;
+  }
+
+  if (isUser) {
+    return <Text selectable style={styles.bodyText}>{displayText}</Text>;
+  }
+
+  const segments = splitRichText(displayText);
+  return (
+    <View style={styles.richText}>
+      {segments.map((segment, index) =>
+        segment.kind === 'formula' ? (
+          <FormulaBlock key={`formula-${index}`} formula={segment.text} />
+        ) : (
+          <MarkdownSegment key={`markdown-${index}`} text={segment.text} language={language} />
+        )
+      )}
+    </View>
   );
 }
 
@@ -326,6 +438,31 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 13,
     lineHeight: 20,
+  },
+  richText: {
+    width: '100%',
+  },
+  formulaBlock: {
+    maxWidth: '100%',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  formulaScrollContent: {
+    minWidth: '100%',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formulaText: {
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'android' ? 'serif' : undefined,
+    fontSize: 19,
+    lineHeight: 28,
   },
   codeBlockWrap: {
     position: 'relative',

@@ -73,6 +73,11 @@ const latexEnvironments = 'cases|aligned|align|array|split|gathered|matrix|pmatr
 const replacements: Array<[RegExp, string]> = [
   [/\\mathcal\s*\{?N\}?/g, '𝒩'],
   [/\\mathcal\s*\{?([A-Za-z])\}?/g, '$1'],
+  [/\\mathbb\s*\{?R\}?/g, 'ℝ'],
+  [/\\mathbb\s*\{?N\}?/g, 'ℕ'],
+  [/\\mathbb\s*\{?Z\}?/g, 'ℤ'],
+  [/\\mathbb\s*\{?Q\}?/g, 'ℚ'],
+  [/\\mathbb\s*\{?C\}?/g, 'ℂ'],
   [/\\mathbf\s*\{([^{}]*)\}/g, '$1'],
   [/\\mathrm\s*\{([^{}]*)\}/g, '$1'],
   [/\\mathit\s*\{([^{}]*)\}/g, '$1'],
@@ -91,6 +96,9 @@ const replacements: Array<[RegExp, string]> = [
   [/\\div\b/g, '÷'],
   [/\\sum\b/g, '∑'],
   [/\\prod\b/g, '∏'],
+  [/\\int\b/g, '∫'],
+  [/\\partial\b/g, '∂'],
+  [/\\nabla\b/g, '∇'],
   [/\\Sigma\b/g, 'Σ'],
   [/\\sigma\b/g, 'σ'],
   [/\\Delta\b/g, 'Δ'],
@@ -131,6 +139,7 @@ const replacements: Array<[RegExp, string]> = [
   [/\\approx\b/g, '≈'],
   [/\\pm\b/g, '±'],
   [/\\infty\b/g, '∞'],
+  [/\\oo\b/g, '∞'],
   [/\\ggg\b/g, '>>>'],
   [/\\gg\b/g, '>>'],
   [/\\ll\b/g, '<<'],
@@ -183,12 +192,26 @@ function normalizeLatexMathText(text: string): string {
     .replace(/\\frac\s+([^\s{}]+)\s+([^\s{}]+)/g, '($1)/($2)')
     .replace(/\bmathcal\s*\{?N\}?/g, '𝒩')
     .replace(/\bmathcal([A-Za-z])\b/g, '$1')
+    .replace(/\bmathbb\s*\{?R\}?/g, 'ℝ')
+    .replace(/\bmathbbR\b/g, 'ℝ')
+    .replace(/\bmathbb\s*\{?N\}?/g, 'ℕ')
+    .replace(/\bmathbbN\b/g, 'ℕ')
+    .replace(/\bmathbb\s*\{?Z\}?/g, 'ℤ')
+    .replace(/\bmathbbZ\b/g, 'ℤ')
+    .replace(/\bmathbb\s*\{?Q\}?/g, 'ℚ')
+    .replace(/\bmathbbQ\b/g, 'ℚ')
+    .replace(/\bmathbb\s*\{?C\}?/g, 'ℂ')
+    .replace(/\bmathbbC\b/g, 'ℂ')
     .replace(/\bsqrt\s*\{([^{}]+)\}/g, '√($1)')
     .replace(/\bsqrt\s*([0-9A-Za-zπσμ]+)/g, '√($1)')
     .replace(/\bfrac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)')
     .replace(/\bfrac\s*([^{}\s]+)\s*\{\s*([^{}]+)\}/g, '($1)/($2)')
     .replace(/\bfrac\s+([^\s{}]+)\s+([^\s{}]+)/g, '($1)/($2)')
     .replace(/\bexp\s*\{([^{}]+)\}/g, 'exp($1)')
+    .replace(/\bint\b/g, '∫')
+    .replace(/∫_oo\^([A-Za-z0-9]+)/g, '∫₋∞^$1')
+    .replace(/∫_(-?∞)\^([A-Za-z0-9]+)/g, '∫_$1^$2')
+    .replace(/\boo\b/g, '∞')
     .replace(/\bpi\b/g, 'π')
     .replace(/([A-Za-z0-9)\]])\s+sim\s+/g, '$1 ~ ')
     .replace(/([A-Za-z0-9)\]])\s+in\s*([([{])/g, '$1 ∈ $2')
@@ -202,6 +225,10 @@ function normalizeLatexMathText(text: string): string {
     .replace(/([([{])\s+/g, '$1')
     .replace(/\s+([)\]}])/g, '$1')
     .replace(/,\s*/g, ', ')
+    .replace(/√\(([^()]+)\)/g, '√$1')
+    .replace(/\(1\)\/\(([^()]+)\)/g, '1/($1)')
+    .replace(/\(([^()]+)\)\/\(([^()]+)\)/g, '($1)/($2)')
+    .replace(/exp\(-\(\(([^()]+)\)\)\/\(([^()]+)\)\)/g, 'exp(-($1)/($2))')
     .replace(/\s*\\\s*/g, ' ')
     .replace(/\s*\/\s*(?=end(?:cases|aligned|align|array|split|gathered|matrix|pmatrix|bmatrix)\b)/g, '\n')
     .replace(/\{([^{}]+)\}/g, '$1')
