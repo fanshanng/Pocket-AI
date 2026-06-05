@@ -5,6 +5,7 @@ import {
   Modal,
   NativeEventEmitter,
   NativeModules,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -35,6 +36,7 @@ import {
   apiProtocolLabel,
   assistantLabel,
   classifyModel,
+  COMMON_REASONING_EFFORT_OPTIONS,
   DEFAULT_LANGUAGE,
   DEFAULT_PROFILE,
   getEndpointHint,
@@ -68,8 +70,10 @@ import type {
   ConversationRecord,
   PendingAttachment,
   PersistedState,
+  ReasoningEffort,
   UiLanguage,
 } from './src/types';
+import { getContentPlugins } from './src/plugins';
 
 type LanguageCopy = {
   eyebrow: string;
@@ -97,6 +101,14 @@ type LanguageCopy = {
   privacySection: string;
   localStorageTitle: string;
   localStorageDescription: string;
+  pluginsSection: string;
+  pluginsTitle: string;
+  pluginsDescription: string;
+  aboutSection: string;
+  createdBy: string;
+  github: string;
+  blog: string;
+  email: string;
   language: string;
   chinese: string;
   english: string;
@@ -118,6 +130,8 @@ type LanguageCopy = {
   apiKey: string;
   model: string;
   reasoningEffort: string;
+  reasoningEffortCustomPlaceholder: string;
+  reasoningEffortInvalid: string;
   responseStorage: string;
   storageEnabled: string;
   storageDisabled: string;
@@ -219,6 +233,14 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     localStorageTitle: '聊天记录保存位置',
     localStorageDescription:
       '聊天记录、会话列表和 API 配置会加密后保存在本机应用私有存储（AsyncStorage: ai-chat-pocket.state.v1）。加密密钥和 API key 保存在系统 SecureStore/Keystore；导入的附件会复制到应用私有文件目录。卸载应用或清空本地数据会删除这些内容。',
+    pluginsSection: '插件',
+    pluginsTitle: '内置内容插件',
+    pluginsDescription: '插件会在消息显示前做轻量处理，例如把常见 LaTeX/密码学公式转成更易读的符号。',
+    aboutSection: '关于',
+    createdBy: '由 fanshanng 共创维护',
+    github: 'GitHub',
+    blog: '博客',
+    email: '邮箱',
     language: '界面语言',
     chinese: '中文',
     english: 'English',
@@ -241,6 +263,8 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     apiKey: 'API Key',
     model: '模型',
     reasoningEffort: '推理强度',
+    reasoningEffortCustomPlaceholder: '输入其他值，如 medium/high',
+    reasoningEffortInvalid: '无效推理强度，未应用。',
     responseStorage: '服务端响应存储',
     storageEnabled: '开启',
     storageDisabled: '关闭',
@@ -331,6 +355,14 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     localStorageTitle: 'Where chats are stored',
     localStorageDescription:
       'Chats, sessions, and API profiles are encrypted into this app private storage (AsyncStorage: ai-chat-pocket.state.v1). The encryption key and API keys are stored in system SecureStore/Keystore; imported attachments are copied into the app private file directory. Uninstalling the app or clearing local data removes them.',
+    pluginsSection: 'Plugins',
+    pluginsTitle: 'Built-in content plugins',
+    pluginsDescription: 'Plugins lightly transform messages before display, such as making common LaTeX and cryptography formulas easier to read.',
+    aboutSection: 'About',
+    createdBy: 'Co-created and maintained by fanshanng',
+    github: 'GitHub',
+    blog: 'Blog',
+    email: 'Email',
     language: 'Interface language',
     chinese: 'Chinese',
     english: 'English',
@@ -353,6 +385,8 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     apiKey: 'API key',
     model: 'Model',
     reasoningEffort: 'Reasoning effort',
+    reasoningEffortCustomPlaceholder: 'Enter another value, e.g. medium/high',
+    reasoningEffortInvalid: 'Invalid reasoning effort. Not applied.',
     responseStorage: 'Server response storage',
     storageEnabled: 'Enabled',
     storageDisabled: 'Disabled',
@@ -558,6 +592,7 @@ export default function App() {
   const skipNextPersistRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingTextRef = useRef('');
+  const reasoningEffortNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handledSharedImageUrisRef = useRef(new Set<string>());
   const [ready, setReady] = useState(false);
   const [persisted, setPersisted] = useState<PersistedState>(EMPTY_STATE);
@@ -574,6 +609,8 @@ export default function App() {
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [draftSessionTitle, setDraftSessionTitle] = useState('');
+  const [reasoningEffortDraft, setReasoningEffortDraft] = useState('');
+  const [reasoningEffortNotice, setReasoningEffortNotice] = useState('');
 
   const uiLanguage = persisted.uiLanguage;
   const copy = COPY[uiLanguage];
@@ -612,6 +649,15 @@ export default function App() {
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [persisted, pendingAttachments, composerText, settingsVisible, sessionsVisible, apiProfilesVisible]);
+
+  useEffect(
+    () => () => {
+      if (reasoningEffortNoticeTimerRef.current) {
+        clearTimeout(reasoningEffortNoticeTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (!ready || Platform.OS !== 'android') return;
@@ -689,18 +735,21 @@ export default function App() {
   async function openSettings() {
     setDraftProfile(activeProfile);
     setApiKey(await loadProfileApiKey(activeProfile.id));
+    resetReasoningEffortInput();
     setSettingsVisible(true);
   }
 
   function openApiProfiles() {
     setDraftProfile(activeProfile);
     loadProfileApiKey(activeProfile.id).then(setApiKey).catch(() => setApiKey(''));
+    resetReasoningEffortInput();
     setApiProfilesVisible(true);
   }
 
   async function selectDraftApiProfile(profile: ApiProfile) {
     setDraftProfile(profile);
     setApiKey(await loadProfileApiKey(profile.id));
+    resetReasoningEffortInput();
   }
 
   function createNewApiProfile() {
@@ -715,6 +764,7 @@ export default function App() {
     }));
     setDraftProfile(profile);
     setApiKey('');
+    resetReasoningEffortInput();
   }
 
   function applyUiLanguage(language: UiLanguage) {
@@ -743,6 +793,54 @@ export default function App() {
     } finally {
       setSavingProfile(false);
     }
+  }
+
+  function resetReasoningEffortInput() {
+    setReasoningEffortDraft('');
+    setReasoningEffortNotice('');
+    if (reasoningEffortNoticeTimerRef.current) {
+      clearTimeout(reasoningEffortNoticeTimerRef.current);
+      reasoningEffortNoticeTimerRef.current = null;
+    }
+  }
+
+  function showReasoningEffortInvalid() {
+    setReasoningEffortNotice(copy.reasoningEffortInvalid);
+    if (reasoningEffortNoticeTimerRef.current) {
+      clearTimeout(reasoningEffortNoticeTimerRef.current);
+    }
+    reasoningEffortNoticeTimerRef.current = setTimeout(() => {
+      setReasoningEffortNotice('');
+      reasoningEffortNoticeTimerRef.current = null;
+    }, 2600);
+  }
+
+  function commitReasoningEffortInput() {
+    const normalized = reasoningEffortDraft.trim().toLowerCase() as ReasoningEffort;
+    if (!normalized) {
+      return;
+    }
+
+    if (REASONING_EFFORT_OPTIONS.includes(normalized)) {
+      setDraftProfile((current) => ({ ...current, reasoningEffort: normalized }));
+      resetReasoningEffortInput();
+      return;
+    }
+
+    showReasoningEffortInvalid();
+  }
+
+  function handleReasoningEffortDraftChange(value: string) {
+    setReasoningEffortDraft(value);
+    const normalized = value.trim().toLowerCase() as ReasoningEffort;
+    if (REASONING_EFFORT_OPTIONS.includes(normalized)) {
+      setDraftProfile((current) => ({ ...current, reasoningEffort: normalized }));
+      resetReasoningEffortInput();
+    }
+  }
+
+  function openExternalUrl(url: string) {
+    Linking.openURL(url).catch(() => undefined);
   }
 
   function formatApiError(error: unknown): string {
@@ -1314,17 +1412,18 @@ export default function App() {
       </SafeAreaView>
 
       <Modal visible={settingsVisible} animationType="slide" transparent onRequestClose={() => setSettingsVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSettingsVisible(false)}>
-          <Pressable
-            style={styles.modalCard}
-            onPress={(event) => {
-              event.stopPropagation();
-            }}
-          >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setSettingsVisible(false)} />
+          <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{copy.settingsTitle}</Text>
             <Text style={styles.modalSubtitle}>{copy.settingsSubtitle}</Text>
 
-            <ScrollView style={styles.modalScroll}>
+            <ScrollView
+              style={styles.modalScroll}
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
               <Text style={styles.sectionLabel}>{copy.generalSection}</Text>
 
               <Text style={styles.fieldLabel}>{copy.language}</Text>
@@ -1375,23 +1474,58 @@ export default function App() {
                 <Text style={styles.infoPanelTitle}>{copy.localStorageTitle}</Text>
                 <Text style={styles.infoPanelText}>{copy.localStorageDescription}</Text>
               </View>
+
+              <Text style={styles.sectionLabel}>{copy.pluginsSection}</Text>
+              <View style={styles.infoPanel}>
+                <Text style={styles.infoPanelTitle}>{copy.pluginsTitle}</Text>
+                <Text style={styles.infoPanelText}>{copy.pluginsDescription}</Text>
+                <View style={styles.pluginRow}>
+                  {getContentPlugins().map((plugin) => (
+                    <View key={plugin.id} style={styles.pluginBadge}>
+                      <Text style={styles.pluginBadgeText}>{plugin.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <Text style={styles.sectionLabel}>{copy.aboutSection}</Text>
+              <View style={styles.infoPanel}>
+                <Text style={styles.infoPanelTitle}>{copy.createdBy}</Text>
+                <View style={styles.contactRow}>
+                  <Pressable
+                    style={styles.contactChip}
+                    onPress={() => openExternalUrl('https://github.com/fanshanng')}
+                  >
+                    <Text style={styles.contactIcon}>GH</Text>
+                    <Text style={styles.contactText}>{copy.github}</Text>
+                  </Pressable>
+                  <Pressable style={styles.contactChip} onPress={() => openExternalUrl('https://fanshanng.cn/')}>
+                    <Text style={styles.contactIcon}>WWW</Text>
+                    <Text style={styles.contactText}>{copy.blog}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.contactChip}
+                    onPress={() => openExternalUrl('mailto:fanshanng@gmail.com')}
+                  >
+                    <Text style={styles.contactIcon}>@</Text>
+                    <Text style={styles.contactText}>{copy.email}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
               <Pressable style={styles.dangerButton} onPress={confirmClearLocalData} disabled={savingProfile}>
                 <Text style={styles.dangerButtonText}>{copy.clearLocalData}</Text>
               </Pressable>
               <Text style={styles.inlineHint}>{copy.clearLocalHint}</Text>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={apiProfilesVisible} animationType="slide" transparent onRequestClose={() => setApiProfilesVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setApiProfilesVisible(false)}>
-          <Pressable
-            style={styles.modalCard}
-            onPress={(event) => {
-              event.stopPropagation();
-            }}
-          >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setApiProfilesVisible(false)} />
+          <View style={styles.modalCard}>
             <View style={styles.sessionHeader}>
               <View style={styles.modalHeading}>
                 <Text style={styles.modalTitle}>{copy.apiProfilesTitle}</Text>
@@ -1402,7 +1536,12 @@ export default function App() {
               </Pressable>
             </View>
 
-            <ScrollView style={styles.modalScroll}>
+            <ScrollView
+              style={styles.modalScroll}
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
               <View style={styles.profileList}>
                 {persisted.profiles.map((profile) => {
                   const isActive = profile.id === persisted.activeProfileId;
@@ -1533,7 +1672,7 @@ export default function App() {
 
               <Text style={styles.fieldLabel}>{copy.reasoningEffort}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                {REASONING_EFFORT_OPTIONS.map((effort) => (
+                {COMMON_REASONING_EFFORT_OPTIONS.map((effort) => (
                   <Pressable
                     key={effort}
                     style={[styles.suggestionChip, draftProfile.reasoningEffort === effort && styles.selectedChip]}
@@ -1550,6 +1689,18 @@ export default function App() {
                   </Pressable>
                 ))}
               </ScrollView>
+              <TextInput
+                value={reasoningEffortDraft}
+                onChangeText={handleReasoningEffortDraftChange}
+                onSubmitEditing={commitReasoningEffortInput}
+                onBlur={commitReasoningEffortInput}
+                style={styles.fieldInput}
+                autoCapitalize="none"
+                returnKeyType="done"
+                placeholder={copy.reasoningEffortCustomPlaceholder}
+                placeholderTextColor="#9BA7B7"
+              />
+              {!!reasoningEffortNotice && <Text style={styles.warningText}>{reasoningEffortNotice}</Text>}
               <Text style={styles.inlineHint}>
                 {getReasoningEffortHint(draftProfile.model, draftProfile.reasoningEffort, uiLanguage)}
               </Text>
@@ -1640,18 +1791,14 @@ export default function App() {
                 <Text style={styles.modalPrimaryText}>{savingProfile ? copy.saving : copy.done}</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={sessionsVisible} animationType="slide" transparent onRequestClose={() => setSessionsVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSessionsVisible(false)}>
-          <Pressable
-            style={styles.modalCard}
-            onPress={(event) => {
-              event.stopPropagation();
-            }}
-          >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setSessionsVisible(false)} />
+          <View style={styles.modalCard}>
             <View style={styles.sessionHeader}>
               <Text style={styles.modalTitle}>{copy.sessionsTitle}</Text>
               <Pressable style={styles.modalPrimarySmall} onPress={createNewSession}>
@@ -1665,7 +1812,12 @@ export default function App() {
               placeholder={copy.sessionSearchPlaceholder}
               placeholderTextColor="#9BA7B7"
             />
-            <ScrollView style={styles.modalScroll}>
+            <ScrollView
+              style={styles.modalScroll}
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
               {persisted.conversations.length === 0 ? (
                 <Text style={styles.emptySessionText}>{copy.sessionsEmpty}</Text>
               ) : visibleConversations.length === 0 ? (
@@ -1702,8 +1854,8 @@ export default function App() {
                 ))
               )}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!renamingConversation} animationType="fade" transparent>
@@ -1924,6 +2076,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'flex-end',
   },
+  modalDismissArea: {
+    flex: 1,
+    width: '100%',
+  },
   modalBackdropCentered: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
@@ -2124,6 +2280,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
+  },
+  pluginRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  pluginBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  pluginBadgeText: {
+    color: '#1D4ED8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  contactChip: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  contactIcon: {
+    color: '#2563EB',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  contactText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '800',
   },
   profileList: {
     gap: 10,

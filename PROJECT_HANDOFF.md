@@ -31,6 +31,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - DeepSeek preset uses `https://api.deepseek.com` and `deepseek-v4-flash`.
 - Message copy success uses a blue filled check icon without a popup.
 - Common LaTeX-style cryptography/math tokens such as `\times`, `\phi`, `\equiv`, `\mod`, `\oplus`, `\land`, `\Sigma_0`, `\ggg`, `cases`, and `aligned` render as readable symbols while copied text stays original.
+- A small internal content plugin system now lives in `src/plugins/`. The bundled `latex-math` plugin handles the LaTeX/cryptography cleanup before message display.
 - Credential-like text such as passwords, API keys, tokens, commands, paths, and URLs renders as a monospace horizontal block.
 - Composer avoids Android keyboard overlap better with `KeyboardAvoidingView`.
 - In-flight requests can be aborted by pressing the stop button.
@@ -40,6 +41,9 @@ This file is for starting a fresh Codex conversation without losing project cont
 - The sessions modal supports local search, rename, delete, and Markdown copy export.
 - The sessions and settings modals close by tapping the dimmed backdrop; the sessions modal no longer has a bottom `Done` button.
 - Settings language selection is an option-list style control and updates/persists immediately; settings no longer has bottom close/save actions.
+- Settings includes a quiet About area with fanshanng GitHub/blog/email links.
+- Settings/API/session modals use a separate dimmed dismiss area above the card so Android vertical scrolling inside the card is less likely to be stolen by the backdrop.
+- API profile reasoning effort chips only show common choices (`high`, `xhigh`); other valid values can be typed and are applied when recognized. Invalid typed values show a short inline warning.
 - Common API errors are mapped into clearer user-facing tips for auth, model/endpoint mismatch, rate limits, timeout, network failure, and provider 5xx errors.
 
 ## Key Files
@@ -68,6 +72,9 @@ This file is for starting a fresh Codex conversation without losing project cont
   - Chat bubble, Markdown rendering, compact copy button, long-press copy.
   - Uses drawn copy/check icons instead of font-dependent symbols.
   - Detects credential-like / technical text and renders it as a monospace horizontal block.
+- `src/plugins/`
+  - Internal content plugin registry.
+  - `latexMath.ts` transforms common LaTeX/math/cryptography tokens into readable symbols.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt`
   - Native bridge for pending shared/dragged image URI events.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/MainActivity.kt`

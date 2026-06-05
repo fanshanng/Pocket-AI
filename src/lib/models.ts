@@ -71,6 +71,8 @@ export const REASONING_EFFORT_OPTIONS: ReasoningEffort[] = [
   'xhigh',
 ];
 
+export const COMMON_REASONING_EFFORT_OPTIONS: ReasoningEffort[] = ['high', 'xhigh'];
+
 export function classifyModel(model: string): AssistantKind {
   return /codex/i.test(model) ? 'codex' : 'cli';
 }
