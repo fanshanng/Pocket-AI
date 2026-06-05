@@ -7,9 +7,10 @@ Pocket AI 是一个 Android 本地优先 AI 聊天应用，基于 Expo / React N
 ## 功能
 
 - 多 API 配置，支持 OpenAI Responses API 和 Chat Completions 兼容接口。
+- 顶部可快速切换当前 API 模型，支持从 `/models` 或 `/model` 获取可用模型。
 - 实时流式回复、停止生成、消息复制、代码块单独复制和长按复制。
 - 文本、拍照、图片、文件附件输入，支持 Android 分享图片、多图分享和分屏拖入图片。
-- 会话搜索、重命名、删除和 Markdown 导出。
+- 左侧会话抽屉，支持会话搜索、自动命名、重命名、删除和 Markdown 导出。
 - 内置内容插件系统，当前包含 LaTeX/密码学公式清理插件。
 - 中英文界面实时切换，API 配置完成后自动保存并应用。
 - API Key 保存在 SecureStore / Android Keystore，本地聊天数据加密保存。

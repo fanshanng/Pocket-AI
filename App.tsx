@@ -48,6 +48,8 @@ import {
 } from './src/lib/models';
 import {
   createAssistantTurn,
+  createConversationTitle,
+  fetchAvailableModels,
   getApiErrorMessage,
   getApiErrorStatus,
   testApiConnection,
@@ -81,8 +83,11 @@ type LanguageCopy = {
   settings: string;
   settingsTitle: string;
   settingsSubtitle: string;
+  back: string;
   generalSection: string;
   apiSection: string;
+  recordsSection: string;
+  storageSection: string;
   apiProfilesTitle: string;
   apiProfilesSubtitle: string;
   manageApiProfiles: string;
@@ -120,6 +125,12 @@ type LanguageCopy = {
   directApi: string;
   modelHintLabel: string;
   activeModel: string;
+  switchModel: string;
+  modelPickerTitle: string;
+  fetchModels: string;
+  fetchingModels: string;
+  modelsEmpty: string;
+  modelsFetchFailed: string;
   profileLabel: string;
   apiPreset: string;
   endpointMode: string;
@@ -213,8 +224,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     settings: '设置',
     settingsTitle: '设置',
     settingsSubtitle: '管理语言、会话和 API 配置。密钥只保存在本机。',
+    back: '返回',
     generalSection: '通用',
     apiSection: 'API 配置',
+    recordsSection: '聊天记录',
+    storageSection: '聊天记录存储',
     apiProfilesTitle: 'API 配置',
     apiProfilesSubtitle: '可以保存多个 API 配置，点完成会自动保存并作为当前聊天使用。',
     manageApiProfiles: '管理 API 配置',
@@ -254,6 +268,12 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     directApi: '直连 API',
     modelHintLabel: '模型说明',
     activeModel: '当前模型',
+    switchModel: '切换模型',
+    modelPickerTitle: '选择模型',
+    fetchModels: '获取模型',
+    fetchingModels: '获取中...',
+    modelsEmpty: '暂无可选模型，请先获取或手动输入。',
+    modelsFetchFailed: '获取模型失败',
     profileLabel: '配置名称',
     apiPreset: '服务商预设',
     endpointMode: '接口类型',
@@ -337,8 +357,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     settings: 'Settings',
     settingsTitle: 'Settings',
     settingsSubtitle: 'Manage language, sessions, and API configuration. Your key stays on this device.',
+    back: 'Back',
     generalSection: 'General',
     apiSection: 'API Configuration',
+    recordsSection: 'Chat History',
+    storageSection: 'Chat Storage',
     apiProfilesTitle: 'API Profiles',
     apiProfilesSubtitle: 'Save multiple API profiles. Done saves and applies the edited profile automatically.',
     manageApiProfiles: 'Manage API profiles',
@@ -378,6 +401,12 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     directApi: 'Direct API',
     modelHintLabel: 'Model notes',
     activeModel: 'Active model',
+    switchModel: 'Switch model',
+    modelPickerTitle: 'Choose model',
+    fetchModels: 'Fetch models',
+    fetchingModels: 'Fetching...',
+    modelsEmpty: 'No models yet. Fetch models or type one manually.',
+    modelsFetchFailed: 'Unable to fetch models',
     profileLabel: 'Profile label',
     apiPreset: 'Provider preset',
     endpointMode: 'Endpoint mode',
@@ -459,6 +488,8 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
 
 const STREAMING_FLUSH_INTERVAL_MS = 120;
 
+type SettingsSection = 'root' | 'api' | 'language' | 'records' | 'storage' | 'plugins' | 'about';
+
 function createConversation(profile: ApiProfile, defaultTitle: string): ConversationRecord {
   const now = new Date().toISOString();
   return {
@@ -477,6 +508,10 @@ function trimTitle(value: string, defaultTitle: string): string {
   const compact = value.trim().replace(/\s+/g, ' ');
   if (!compact) return defaultTitle;
   return compact.length > 36 ? `${compact.slice(0, 36)}...` : compact;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function upsertConversation(
@@ -597,6 +632,7 @@ function formatConversationMarkdown(conversation: ConversationRecord): string {
 
 export default function App() {
   const scrollRef = useRef<ScrollView>(null);
+  const shouldScrollToBottomRef = useRef(true);
   const skipNextPersistRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingTextRef = useRef('');
@@ -618,6 +654,10 @@ export default function App() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [sessionsVisible, setSessionsVisible] = useState(false);
   const [apiProfilesVisible, setApiProfilesVisible] = useState(false);
+  const [modelPickerVisible, setModelPickerVisible] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('root');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [draftSessionTitle, setDraftSessionTitle] = useState('');
@@ -659,7 +699,13 @@ export default function App() {
   }, [persisted, ready]);
 
   useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
+    if (!shouldScrollToBottomRef.current) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    });
+    shouldScrollToBottomRef.current = false;
   }, [
     activeConversation?.id,
     activeConversation?.messages.length,
@@ -737,6 +783,7 @@ export default function App() {
   }, [copy.imagePickerFailed, copy.imagePickerFailedFallback, ready]);
 
   function updateConversations(nextConversations: ConversationRecord[], nextActiveId: string | null) {
+    shouldScrollToBottomRef.current = true;
     setPersisted((current) => ({
       ...current,
       conversations: nextConversations,
@@ -758,6 +805,7 @@ export default function App() {
     setDraftProfile(activeProfile);
     setApiKey(await loadProfileApiKey(activeProfile.id));
     resetReasoningEffortInput();
+    setSettingsSection('root');
     setSettingsVisible(true);
   }
 
@@ -993,6 +1041,54 @@ export default function App() {
     }
   }
 
+  async function fetchModelsForProfile(profile: ApiProfile = activeProfile, key = apiKey) {
+    if (!key.trim()) {
+      openSettings();
+      Alert.alert(copy.apiKeyRequiredTitle, copy.apiKeyRequiredMessage);
+      return;
+    }
+
+    setFetchingModels(true);
+    try {
+      const result = await fetchAvailableModels({ profile, apiKey: key.trim() });
+      setAvailableModels(result.models);
+      if (result.models.length === 0) {
+        Alert.alert(copy.modelPickerTitle, copy.modelsEmpty);
+      }
+    } catch (error) {
+      Alert.alert(copy.modelsFetchFailed, error instanceof Error ? error.message : copy.modelsFetchFailed);
+    } finally {
+      setFetchingModels(false);
+    }
+  }
+
+  function openModelPicker() {
+    setAvailableModels((current) => uniqueStrings([activeProfile.model, draftProfile.model, ...MODEL_SUGGESTIONS, ...current]));
+    setModelPickerVisible(true);
+    if (apiKey.trim()) {
+      void fetchModelsForProfile(activeProfile, apiKey);
+    }
+  }
+
+  function applyModelToActiveProfile(model: string) {
+    const nextModel = model.trim();
+    if (!nextModel) {
+      return;
+    }
+    setPersisted((current) => {
+      const profile = getActiveProfile(current);
+      const updatedProfile: ApiProfile = { ...profile, model: nextModel };
+      const profiles = upsertProfile(current.profiles, updatedProfile);
+      return {
+        ...current,
+        profiles,
+        profile: updatedProfile,
+      };
+    });
+    setDraftProfile((current) => ({ ...current, model: nextModel }));
+    setModelPickerVisible(false);
+  }
+
   function flushStreamingText() {
     const conversationId = streamingConversationIdRef.current;
     const messageId = streamingMessageIdRef.current;
@@ -1151,6 +1247,20 @@ export default function App() {
         messages: [...optimisticConversation.messages, assistantMessage],
       };
       updateConversations(upsertConversation(optimisticConversations, completedConversation), conversation.id);
+
+      if (conversation.messages.length === 0) {
+        void createConversationTitle({
+          profile: activeProfile,
+          apiKey: apiKey.trim(),
+          userText: trimmed,
+          assistantText: assistantMessage.text,
+          language: uiLanguage,
+        }).then((generatedTitle) => {
+          if (generatedTitle.trim()) {
+            renameConversation(conversation.id, generatedTitle);
+          }
+        });
+      }
     } catch (error) {
       clearStreamingFlushTimer();
       if (abortController.signal.aborted) {
@@ -1209,6 +1319,7 @@ export default function App() {
   }
 
   function openConversation(conversationId: string) {
+    shouldScrollToBottomRef.current = true;
     setPersisted((current) => ({
       ...current,
       activeConversationId: conversationId,
@@ -1297,6 +1408,8 @@ export default function App() {
       setSettingsVisible(false);
       setSessionsVisible(false);
       setApiProfilesVisible(false);
+      setModelPickerVisible(false);
+      setSettingsSection('root');
     } catch (error) {
       Alert.alert(copy.clearFailed, error instanceof Error ? error.message : copy.clearFailedFallback);
     } finally {
@@ -1315,6 +1428,62 @@ export default function App() {
         },
       },
     ]);
+  }
+
+  function renderSettingsRoot() {
+    const items: Array<{ key: SettingsSection; title: string; subtitle: string }> = [
+      {
+        key: 'api',
+        title: copy.apiSection,
+        subtitle: `${activeProfile.label} · ${activeProfile.model}`,
+      },
+      {
+        key: 'plugins',
+        title: copy.pluginsSection,
+        subtitle: copy.pluginsDescription,
+      },
+      {
+        key: 'storage',
+        title: copy.storageSection,
+        subtitle: copy.localStorageTitle,
+      },
+      {
+        key: 'language',
+        title: copy.language,
+        subtitle: uiLanguage === 'zh' ? copy.chinese : copy.english,
+      },
+      {
+        key: 'about',
+        title: copy.aboutSection,
+        subtitle: copy.createdBy,
+      },
+    ];
+
+    return (
+      <>
+        {items.map((item) => (
+          <Pressable
+            key={item.key}
+            style={styles.settingsNavItem}
+            onPress={() => {
+              if (item.key === 'api') {
+                openApiProfiles();
+                return;
+              }
+              setSettingsSection(item.key);
+            }}
+          >
+            <View style={styles.settingsNavText}>
+              <Text style={styles.settingsNavTitle}>{item.title}</Text>
+              <Text style={styles.settingsNavSubtitle} numberOfLines={1}>
+                {item.subtitle}
+              </Text>
+            </View>
+            <Text style={styles.settingsNavArrow}>›</Text>
+          </Pressable>
+        ))}
+      </>
+    );
   }
 
   if (!ready) {
@@ -1349,10 +1518,10 @@ export default function App() {
             >
               <Text style={styles.menuIconText}>☰</Text>
             </Pressable>
-            <Pressable style={styles.sessionSwitcher} onPress={() => setSessionsVisible(true)}>
-              <Text style={styles.title}>{copy.title}</Text>
+            <Pressable style={styles.sessionSwitcher} onPress={openModelPicker}>
+              <Text style={styles.title} numberOfLines={1}>{activeProfile.model}</Text>
               <Text style={styles.sessionLine} numberOfLines={1}>
-                {activeSessionTitle} · {activeProfile.label} · {activeProfile.model}
+                {activeSessionTitle} · {activeProfile.label}
               </Text>
             </Pressable>
             <View style={styles.topActions}>
@@ -1428,24 +1597,24 @@ export default function App() {
                   ))}
                 </ScrollView>
               )}
+              {attachmentMenuVisible && !composerDisabled && (
+                <View style={styles.attachOptionRow}>
+                  <Pressable style={styles.attachOption} onPress={attachFromCamera}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '拍' : 'Cam'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.camera}</Text>
+                  </Pressable>
+                  <Pressable style={styles.attachOption} onPress={attachImages}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '图' : 'Img'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.image}</Text>
+                  </Pressable>
+                  <Pressable style={styles.attachOption} onPress={attachFiles}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '文' : 'Doc'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.file}</Text>
+                  </Pressable>
+                </View>
+              )}
               <View style={styles.composerRow}>
                 <View style={styles.attachMenuWrap}>
-                  {attachmentMenuVisible && !composerDisabled && (
-                    <View style={styles.attachMenu}>
-                      <Pressable style={styles.attachMenuItem} onPress={attachFromCamera}>
-                        <Text style={styles.attachMenuIcon}>{uiLanguage === 'zh' ? '拍' : 'Cam'}</Text>
-                        <Text style={styles.attachMenuText}>{copy.camera}</Text>
-                      </Pressable>
-                      <Pressable style={styles.attachMenuItem} onPress={attachImages}>
-                        <Text style={styles.attachMenuIcon}>{uiLanguage === 'zh' ? '图' : 'Img'}</Text>
-                        <Text style={styles.attachMenuText}>{copy.image}</Text>
-                      </Pressable>
-                      <Pressable style={styles.attachMenuItem} onPress={attachFiles}>
-                        <Text style={styles.attachMenuIcon}>{uiLanguage === 'zh' ? '文' : 'Doc'}</Text>
-                        <Text style={styles.attachMenuText}>{copy.file}</Text>
-                      </Pressable>
-                    </View>
-                  )}
                   <Pressable
                     style={[styles.smallAction, attachmentMenuVisible && styles.smallActionActive]}
                     onPress={() => setAttachmentMenuVisible((visible) => !visible)}
@@ -1488,8 +1657,27 @@ export default function App() {
         <View style={styles.modalBackdrop}>
           <Pressable style={styles.modalDismissArea} onPress={() => setSettingsVisible(false)} />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{copy.settingsTitle}</Text>
-            <Text style={styles.modalSubtitle}>{copy.settingsSubtitle}</Text>
+            <View style={styles.settingsHeader}>
+              {settingsSection !== 'root' && (
+                <Pressable style={styles.backButton} onPress={() => setSettingsSection('root')}>
+                  <Text style={styles.backButtonText}>‹</Text>
+                </Pressable>
+              )}
+              <View style={styles.modalHeading}>
+                <Text style={styles.modalTitle}>
+                  {settingsSection === 'root'
+                    ? copy.settingsTitle
+                    : settingsSection === 'language'
+                      ? copy.language
+                      : settingsSection === 'storage'
+                        ? copy.storageSection
+                        : settingsSection === 'plugins'
+                          ? copy.pluginsSection
+                          : copy.aboutSection}
+                </Text>
+                <Text style={styles.modalSubtitle}>{copy.settingsSubtitle}</Text>
+              </View>
+            </View>
 
             <ScrollView
               style={styles.modalScroll}
@@ -1497,99 +1685,128 @@ export default function App() {
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
             >
-              <Text style={styles.sectionLabel}>{copy.generalSection}</Text>
+              {settingsSection === 'root' && renderSettingsRoot()}
 
-              <Text style={styles.fieldLabel}>{copy.language}</Text>
-              <View style={styles.settingOptionGroup}>
-                <Pressable
-                  style={[styles.settingOption, uiLanguage === 'zh' && styles.settingOptionSelected]}
-                  onPress={() => applyUiLanguage('zh')}
-                >
-                  <View style={[styles.settingOptionRadio, uiLanguage === 'zh' && styles.settingOptionRadioSelected]}>
-                    {uiLanguage === 'zh' && <View style={styles.settingOptionRadioDot} />}
-                  </View>
-                  <Text style={styles.settingOptionText}>{copy.chinese}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.settingOption, uiLanguage === 'en' && styles.settingOptionSelected]}
-                  onPress={() => applyUiLanguage('en')}
-                >
-                  <View style={[styles.settingOptionRadio, uiLanguage === 'en' && styles.settingOptionRadioSelected]}>
-                    {uiLanguage === 'en' && <View style={styles.settingOptionRadioDot} />}
-                  </View>
-                  <Text style={styles.settingOptionText}>{copy.english}</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.quickActionsRow}>
-                <Pressable style={styles.secondaryActionCard} onPress={() => setSessionsVisible(true)}>
-                  <Text style={styles.secondaryActionLabel}>{copy.openSessions}</Text>
-                </Pressable>
-                <Pressable style={styles.secondaryActionCard} onPress={createNewSession}>
-                  <Text style={styles.secondaryActionLabel}>{copy.newSession}</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.sectionLabel}>{copy.apiSection}</Text>
-              <Pressable style={styles.profileSummaryCard} onPress={openApiProfiles}>
-                <View style={styles.profileSummaryHeader}>
-                  <Text style={styles.profileSummaryTitle}>{activeProfile.label}</Text>
-                  <Text style={styles.profileSummaryBadge}>{copy.activeApiProfile}</Text>
-                </View>
-                <Text style={styles.profileSummaryText} numberOfLines={1}>
-                  {activeProfile.model} · {activeProfile.baseUrl}
-                </Text>
-                <Text style={styles.profileSummaryAction}>{copy.manageApiProfiles}</Text>
-              </Pressable>
-
-              <Text style={styles.sectionLabel}>{copy.privacySection}</Text>
-              <View style={styles.infoPanel}>
-                <Text style={styles.infoPanelTitle}>{copy.localStorageTitle}</Text>
-                <Text style={styles.infoPanelText}>{copy.localStorageDescription}</Text>
-              </View>
-
-              <Text style={styles.sectionLabel}>{copy.pluginsSection}</Text>
-              <View style={styles.infoPanel}>
-                <Text style={styles.infoPanelTitle}>{copy.pluginsTitle}</Text>
-                <Text style={styles.infoPanelText}>{copy.pluginsDescription}</Text>
-                <View style={styles.pluginRow}>
-                  {getContentPlugins().map((plugin) => (
-                    <View key={plugin.id} style={styles.pluginBadge}>
-                      <Text style={styles.pluginBadgeText}>{plugin.label}</Text>
+              {settingsSection === 'language' && (
+                <View style={styles.settingOptionGroup}>
+                  <Pressable
+                    style={[styles.settingOption, uiLanguage === 'zh' && styles.settingOptionSelected]}
+                    onPress={() => applyUiLanguage('zh')}
+                  >
+                    <View style={[styles.settingOptionRadio, uiLanguage === 'zh' && styles.settingOptionRadioSelected]}>
+                      {uiLanguage === 'zh' && <View style={styles.settingOptionRadioDot} />}
                     </View>
-                  ))}
-                </View>
-              </View>
-
-              <Text style={styles.sectionLabel}>{copy.aboutSection}</Text>
-              <View style={styles.infoPanel}>
-                <Text style={styles.infoPanelTitle}>{copy.createdBy}</Text>
-                <View style={styles.contactRow}>
-                  <Pressable
-                    style={styles.contactChip}
-                    onPress={() => openExternalUrl('https://github.com/fanshanng')}
-                  >
-                    <Text style={styles.contactIcon}>GH</Text>
-                    <Text style={styles.contactText}>{copy.github}</Text>
-                  </Pressable>
-                  <Pressable style={styles.contactChip} onPress={() => openExternalUrl('https://fanshanng.cn/')}>
-                    <Text style={styles.contactIcon}>WWW</Text>
-                    <Text style={styles.contactText}>{copy.blog}</Text>
+                    <Text style={styles.settingOptionText}>{copy.chinese}</Text>
                   </Pressable>
                   <Pressable
-                    style={styles.contactChip}
-                    onPress={() => openExternalUrl('mailto:fanshanng@gmail.com')}
+                    style={[styles.settingOption, uiLanguage === 'en' && styles.settingOptionSelected]}
+                    onPress={() => applyUiLanguage('en')}
                   >
-                    <Text style={styles.contactIcon}>@</Text>
-                    <Text style={styles.contactText}>{copy.email}</Text>
+                    <View style={[styles.settingOptionRadio, uiLanguage === 'en' && styles.settingOptionRadioSelected]}>
+                      {uiLanguage === 'en' && <View style={styles.settingOptionRadioDot} />}
+                    </View>
+                    <Text style={styles.settingOptionText}>{copy.english}</Text>
                   </Pressable>
                 </View>
-              </View>
+              )}
 
-              <Pressable style={styles.dangerButton} onPress={confirmClearLocalData} disabled={savingProfile}>
-                <Text style={styles.dangerButtonText}>{copy.clearLocalData}</Text>
+              {settingsSection === 'storage' && (
+                <>
+                  <View style={styles.infoPanel}>
+                    <Text style={styles.infoPanelTitle}>{copy.localStorageTitle}</Text>
+                    <Text style={styles.infoPanelText}>{copy.localStorageDescription}</Text>
+                  </View>
+                  <Pressable style={styles.dangerButton} onPress={confirmClearLocalData} disabled={savingProfile}>
+                    <Text style={styles.dangerButtonText}>{copy.clearLocalData}</Text>
+                  </Pressable>
+                  <Text style={styles.inlineHint}>{copy.clearLocalHint}</Text>
+                </>
+              )}
+
+              {settingsSection === 'plugins' && (
+                <View style={styles.infoPanel}>
+                  <Text style={styles.infoPanelTitle}>{copy.pluginsTitle}</Text>
+                  <Text style={styles.infoPanelText}>{copy.pluginsDescription}</Text>
+                  <View style={styles.pluginRow}>
+                    {getContentPlugins().map((plugin) => (
+                      <View key={plugin.id} style={styles.pluginBadge}>
+                        <Text style={styles.pluginBadgeText}>{plugin.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {settingsSection === 'about' && (
+                <View style={styles.infoPanel}>
+                  <Text style={styles.infoPanelTitle}>{copy.createdBy}</Text>
+                  <View style={styles.contactRow}>
+                    <Pressable
+                      style={styles.contactChip}
+                      onPress={() => openExternalUrl('https://github.com/fanshanng')}
+                    >
+                      <Text style={styles.contactIcon}>GH</Text>
+                      <Text style={styles.contactText}>{copy.github}</Text>
+                    </Pressable>
+                    <Pressable style={styles.contactChip} onPress={() => openExternalUrl('https://fanshanng.cn/')}>
+                      <Text style={styles.contactIcon}>WWW</Text>
+                      <Text style={styles.contactText}>{copy.blog}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.contactChip}
+                      onPress={() => openExternalUrl('mailto:fanshanng@gmail.com')}
+                    >
+                      <Text style={styles.contactIcon}>@</Text>
+                      <Text style={styles.contactText}>{copy.email}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={modelPickerVisible} animationType="slide" transparent onRequestClose={() => setModelPickerVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setModelPickerVisible(false)} />
+          <View style={styles.modalCardCompact}>
+            <View style={styles.sessionHeader}>
+              <View style={styles.modalHeading}>
+                <Text style={styles.modalTitle}>{copy.modelPickerTitle}</Text>
+                <Text style={styles.modalSubtitle}>{activeProfile.label} · {activeProfile.baseUrl}</Text>
+              </View>
+              <Pressable
+                style={[styles.modalPrimarySmall, fetchingModels && styles.disabledAction]}
+                onPress={() => {
+                  void fetchModelsForProfile(activeProfile, apiKey);
+                }}
+                disabled={fetchingModels}
+              >
+                <Text style={styles.modalPrimaryText}>{fetchingModels ? copy.fetchingModels : copy.fetchModels}</Text>
               </Pressable>
-              <Text style={styles.inlineHint}>{copy.clearLocalHint}</Text>
+            </View>
+            <ScrollView
+              style={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modelListContent}
+            >
+              {availableModels.length === 0 ? (
+                <Text style={styles.emptySessionText}>{copy.modelsEmpty}</Text>
+              ) : (
+                availableModels.map((model) => (
+                  <Pressable
+                    key={model}
+                    style={[styles.modelOption, activeProfile.model === model && styles.modelOptionSelected]}
+                    onPress={() => applyModelToActiveProfile(model)}
+                  >
+                    <Text style={[styles.modelOptionText, activeProfile.model === model && styles.modelOptionTextSelected]}>
+                      {model}
+                    </Text>
+                    {activeProfile.model === model && <Text style={styles.profileStateActive}>{copy.activeModel}</Text>}
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1728,8 +1945,19 @@ export default function App() {
                 placeholder="gpt-5.4"
                 placeholderTextColor="#9BA7B7"
               />
+              <Pressable
+                style={[styles.inlineUtilityButton, fetchingModels && styles.disabledAction]}
+                onPress={() => {
+                  void fetchModelsForProfile(sanitizeProfile(draftProfile), apiKey);
+                }}
+                disabled={fetchingModels}
+              >
+                <Text style={styles.inlineUtilityButtonText}>
+                  {fetchingModels ? copy.fetchingModels : copy.fetchModels}
+                </Text>
+              </Pressable>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                {MODEL_SUGGESTIONS.map((model) => (
+                {uniqueStrings([...availableModels, ...MODEL_SUGGESTIONS]).map((model) => (
                   <Pressable
                     key={model}
                     style={[styles.suggestionChip, draftProfile.model === model && styles.selectedChip]}
@@ -1869,9 +2097,8 @@ export default function App() {
       </Modal>
 
       <Modal visible={sessionsVisible} animationType="slide" transparent onRequestClose={() => setSessionsVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={styles.modalDismissArea} onPress={() => setSessionsVisible(false)} />
-          <View style={styles.modalCard}>
+        <View style={styles.drawerBackdrop}>
+          <View style={styles.sessionDrawer}>
             <View style={styles.sessionHeader}>
               <Text style={styles.modalTitle}>{copy.sessionsTitle}</Text>
               <Pressable style={styles.modalPrimarySmall} onPress={createNewSession}>
@@ -1924,6 +2151,7 @@ export default function App() {
               )}
             </ScrollView>
           </View>
+          <Pressable style={styles.drawerDismissArea} onPress={() => setSessionsVisible(false)} />
         </View>
       </Modal>
 
@@ -2131,43 +2359,32 @@ const styles = StyleSheet.create({
   attachMenuWrap: {
     position: 'relative',
   },
-  attachMenu: {
-    position: 'absolute',
-    left: 0,
-    bottom: 46,
-    width: 116,
-    borderRadius: 16,
+  attachOptionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 2,
+    paddingBottom: 6,
+  },
+  attachOption: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: '#D8E0EA',
-    backgroundColor: '#FFFFFF',
-    padding: 5,
-    gap: 4,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-    zIndex: 20,
-  },
-  attachMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 36,
-    borderRadius: 12,
-    paddingHorizontal: 8,
     backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
-  attachMenuIcon: {
-    width: 28,
+  attachOptionIcon: {
     color: '#2563EB',
     fontSize: 11,
     fontWeight: '900',
   },
-  attachMenuText: {
-    flex: 1,
+  attachOptionText: {
+    marginTop: 2,
     color: '#111827',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   sendAction: {
@@ -2192,6 +2409,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'flex-end',
   },
+  drawerBackdrop: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+  },
+  sessionDrawer: {
+    width: '86%',
+    maxWidth: 380,
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'android' ? 30 : 44,
+    paddingBottom: 22,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  drawerDismissArea: {
+    flex: 1,
+  },
   modalDismissArea: {
     flex: 1,
     width: '100%',
@@ -2213,10 +2449,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  modalCardCompact: {
+    maxHeight: '70%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   modalTitle: {
     color: '#111827',
     fontSize: 22,
     fontWeight: '800',
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    marginTop: 2,
+  },
+  backButtonText: {
+    color: '#1F2937',
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 26,
   },
   modalHeading: {
     flex: 1,
@@ -2258,8 +2527,83 @@ const styles = StyleSheet.create({
     minHeight: 96,
     textAlignVertical: 'top',
   },
+  inlineUtilityButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  inlineUtilityButtonText: {
+    color: '#2563EB',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  settingsNavItem: {
+    minHeight: 72,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  settingsNavText: {
+    flex: 1,
+  },
+  settingsNavTitle: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  settingsNavSubtitle: {
+    color: '#64748B',
+    fontSize: 13,
+    marginTop: 5,
+  },
+  settingsNavArrow: {
+    color: '#94A3B8',
+    fontSize: 24,
+    fontWeight: '800',
+  },
   sessionSearchInput: {
     marginTop: 16,
+  },
+  modelListContent: {
+    paddingBottom: 10,
+  },
+  modelOption: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  modelOptionSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  modelOptionText: {
+    flex: 1,
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  modelOptionTextSelected: {
+    color: '#1D4ED8',
   },
   renameInput: {
     marginTop: 16,
@@ -2314,12 +2658,6 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 15,
     fontWeight: '800',
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-    marginBottom: 8,
   },
   secondaryActionCard: {
     flex: 1,

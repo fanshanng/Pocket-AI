@@ -6,12 +6,13 @@
 
 - Android 本地优先 AI 聊天应用。
 - 支持多个 OpenAI 兼容 API 配置。
+- 支持顶部快速切换模型，并可通过 `/models` 或 `/model` 获取可用模型。
 - 支持 OpenAI Responses API 和 Chat Completions 兼容接口。
 - 支持实时流式回复、停止生成，并优化长回复生成时的滑动体验。
 - 支持文本、拍照、图片、文件附件输入。
 - 支持回复中的每个代码块单独复制。
 - 支持 Android 图片分享、多图分享和分屏拖入图片。
-- 支持会话搜索、重命名、删除和 Markdown 导出。
+- 支持左侧会话抽屉、会话自动命名、搜索、重命名、删除和 Markdown 导出。
 - 支持中英文界面实时切换。
 - 内置 LaTeX/密码学公式清理插件。
 - API Key 保存在 SecureStore / Android Keystore，本地聊天数据加密保存。
@@ -25,7 +26,7 @@
 APK SHA256：
 
 ```text
-292193070D913768BE09F82817480D2020D053526C5355FC018606B40D2350A3
+AB70206B9E767CBA386972C7E9A5E146B9273AE1C22F8789F892C7345D0AE742
 ```
 
 签名证书 SHA-256：

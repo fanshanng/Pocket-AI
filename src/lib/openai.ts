@@ -1,4 +1,4 @@
-import type { ApiProfile, AttachmentRecord, ChatMessage, ConversationRecord } from '../types';
+import type { ApiProfile, AttachmentRecord, ChatMessage, ConversationRecord, UiLanguage } from '../types';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import {
@@ -52,6 +52,11 @@ export type ApiConnectionTestResult = {
   latencyMs: number;
   responseId: string;
   sampleText: string;
+};
+
+export type FetchModelsResult = {
+  endpoint: string;
+  models: string[];
 };
 
 export class ApiRequestError extends Error {
@@ -344,6 +349,79 @@ async function requestJson(url: string, init: RequestInit): Promise<any> {
   return payload;
 }
 
+function uniqueCompact(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function looksLikeModelId(value: string): boolean {
+  const compact = value.trim();
+  return (
+    /^[A-Za-z0-9][A-Za-z0-9._:/-]{1,96}$/.test(compact) &&
+    !/^https?:\/\//i.test(compact) &&
+    /(gpt|o\d|deepseek|claude|gemini|qwen|glm|llama|mistral|yi-|kimi|moonshot|doubao|hunyuan|ernie|codex|chat|reasoner|flash|turbo|mini|pro|max)/i.test(
+      compact
+    )
+  );
+}
+
+function collectModelStrings(value: unknown, output: string[]) {
+  if (typeof value === 'string') {
+    if (looksLikeModelId(value)) {
+      output.push(value);
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectModelStrings(item, output));
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ['id', 'model', 'name']) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && looksLikeModelId(candidate)) {
+      output.push(candidate);
+    }
+  }
+
+  Object.values(record).forEach((item) => collectModelStrings(item, output));
+}
+
+function extractModels(payload: any): string[] {
+  const directModels = Array.isArray(payload?.data)
+    ? payload.data
+        .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.model || item?.name))
+        .filter((item: unknown): item is string => typeof item === 'string' && looksLikeModelId(item))
+    : [];
+
+  if (directModels.length > 0) {
+    return uniqueCompact(directModels).sort((a, b) => a.localeCompare(b));
+  }
+
+  const collected: string[] = [];
+  collectModelStrings(payload, collected);
+  return uniqueCompact(collected).sort((a, b) => a.localeCompare(b));
+}
+
+function sanitizeGeneratedTitle(text: string, language: UiLanguage): string {
+  const firstLine = text
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+  const cleaned = (firstLine || '')
+    .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+    .replace(/^(标题|会话标题|title)\s*[:：-]\s*/i, '')
+    .replace(/[。.!！?？,，;；]+$/g, '')
+    .trim();
+  const limit = language === 'zh' ? 10 : 24;
+  return Array.from(cleaned).slice(0, limit).join('');
+}
+
 function parseApiError(status: number | undefined, payload: any): ApiErrorDetails {
   const errorPayload = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
   const message =
@@ -529,6 +607,125 @@ export async function testApiConnection(options: {
       throw new ApiRequestError({ message: `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.` });
     }
     throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchAvailableModels(options: {
+  profile: ApiProfile;
+  apiKey: string;
+  timeoutMs?: number;
+}): Promise<FetchModelsResult> {
+  const { profile, apiKey, timeoutMs = 15000 } = options;
+  const baseUrl = normalizeBaseUrl(profile.baseUrl);
+  const endpoints = [`${baseUrl}/models`, `${baseUrl}/model`];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError: unknown;
+  let emptyResult: FetchModelsResult | null = null;
+
+  try {
+    for (const endpoint of endpoints) {
+      try {
+        const payload = await requestJson(endpoint, {
+          method: 'GET',
+          headers: buildHeaders(profile, apiKey),
+          signal: controller.signal,
+        });
+
+        const result = {
+          endpoint,
+          models: extractModels(payload),
+        };
+
+        if (result.models.length > 0) {
+          return result;
+        }
+        emptyResult = emptyResult || result;
+      } catch (error) {
+        lastError = error;
+        if (controller.signal.aborted) {
+          throw error;
+        }
+      }
+    }
+
+    if (emptyResult) {
+      return emptyResult;
+    }
+    throw lastError;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiRequestError({ message: `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.` });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function createConversationTitle(options: {
+  profile: ApiProfile;
+  apiKey: string;
+  userText: string;
+  assistantText: string;
+  language: UiLanguage;
+  timeoutMs?: number;
+}): Promise<string> {
+  const { profile, apiKey, userText, assistantText, language, timeoutMs = 15000 } = options;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const prompt =
+    language === 'zh'
+      ? `请根据下面这轮对话生成一个中文标题，只输出标题，10个汉字以内，不要标点。\n\n用户：${userText || '(附件)'}\n\n助手：${assistantText}`
+      : `Generate a short chat title. Output only the title, within 24 characters, no punctuation.\n\nUser: ${userText || '(attachment)'}\n\nAssistant: ${assistantText}`;
+
+  try {
+    if (profile.apiProtocol === 'chatCompletions') {
+      const payload = await requestJson(`${normalizeBaseUrl(profile.baseUrl)}/chat/completions`, {
+        method: 'POST',
+        headers: buildHeaders(profile, apiKey),
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: profile.model.trim(),
+          messages: [
+            {
+              role: 'system',
+              content:
+                language === 'zh'
+                  ? '你只负责生成极短会话标题。只输出标题本身。'
+                  : 'You only generate very short chat titles. Output only the title.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          stream: false,
+          max_tokens: 32,
+        }),
+      });
+
+      return sanitizeGeneratedTitle(extractChatCompletionAssistantText(payload), language);
+    }
+
+    const payload = await requestJson(`${normalizeBaseUrl(profile.baseUrl)}/responses`, {
+      method: 'POST',
+      headers: buildHeaders(profile, apiKey),
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: profile.model.trim(),
+        input: prompt,
+        stream: false,
+        store: false,
+        max_output_tokens: 32,
+      }),
+    });
+
+    return sanitizeGeneratedTitle(extractResponsesAssistantText(payload), language);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return '';
+    }
+    return '';
   } finally {
     clearTimeout(timeout);
   }
