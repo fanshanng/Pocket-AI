@@ -41,13 +41,13 @@ import {
   API_PROTOCOL_OPTIONS,
   apiProtocolLabel,
   classifyModel,
-  COMMON_REASONING_EFFORT_OPTIONS,
   DEFAULT_LANGUAGE,
   DEFAULT_PROFILE,
   getEndpointHint,
   getModelHint,
   getProtocolStorageHint,
   getReasoningEffortHint,
+  modelSupportsReasoning,
   MODEL_SUGGESTIONS,
   REASONING_EFFORT_OPTIONS,
 } from './src/lib/models';
@@ -136,6 +136,11 @@ type LanguageCopy = {
   fetchingModels: string;
   modelsEmpty: string;
   modelsFetchFailed: string;
+  basicApiSettings: string;
+  advancedApiSettings: string;
+  showAdvancedSettings: string;
+  hideAdvancedSettings: string;
+  currentValue: string;
   profileLabel: string;
   apiPreset: string;
   endpointMode: string;
@@ -146,6 +151,9 @@ type LanguageCopy = {
   apiKey: string;
   model: string;
   reasoningEffort: string;
+  fetchReasoningEfforts: string;
+  reasoningEffortsReady: string;
+  reasoningEffortsUnavailable: string;
   reasoningEffortCustomPlaceholder: string;
   reasoningEffortInvalid: string;
   responseStorage: string;
@@ -168,6 +176,11 @@ type LanguageCopy = {
   renameSessionPlaceholder: string;
   exportSession: string;
   copiedSessionExport: string;
+  selectSessions: string;
+  cancelSelection: string;
+  copySelectedSessions: string;
+  latestSessionsFirst: string;
+  selectedSessionsCount: (count: number) => string;
   done: string;
   delete: string;
   deleteSessionTitle: string;
@@ -279,6 +292,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     fetchingModels: '获取中...',
     modelsEmpty: '暂无可选模型，请先获取或手动输入。',
     modelsFetchFailed: '获取模型失败',
+    basicApiSettings: '常用配置',
+    advancedApiSettings: '高级配置',
+    showAdvancedSettings: '展开高级配置',
+    hideAdvancedSettings: '收起高级配置',
+    currentValue: '当前',
     profileLabel: '配置名称',
     apiPreset: '服务商预设',
     endpointMode: '接口类型',
@@ -290,6 +308,9 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     apiKey: 'API Key',
     model: '模型',
     reasoningEffort: '推理强度',
+    fetchReasoningEfforts: '获取推理强度',
+    reasoningEffortsReady: '已根据当前接口和模型更新可选推理强度。',
+    reasoningEffortsUnavailable: '当前模型未识别到推理强度参数，建议保持关闭。',
     reasoningEffortCustomPlaceholder: '输入其他值，如 medium/high',
     reasoningEffortInvalid: '无效推理强度，未应用。',
     responseStorage: '服务端响应存储',
@@ -312,6 +333,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     renameSessionPlaceholder: '输入新的会话名称',
     exportSession: '复制导出',
     copiedSessionExport: '已复制为 Markdown。',
+    selectSessions: '选择',
+    cancelSelection: '取消选择',
+    copySelectedSessions: '复制所选',
+    latestSessionsFirst: '最新对话在上方',
+    selectedSessionsCount: (count) => `已选 ${count} 个`,
     done: '完成',
     delete: '删除',
     deleteSessionTitle: '删除会话？',
@@ -412,6 +438,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     fetchingModels: 'Fetching...',
     modelsEmpty: 'No models yet. Fetch models or type one manually.',
     modelsFetchFailed: 'Unable to fetch models',
+    basicApiSettings: 'Basic settings',
+    advancedApiSettings: 'Advanced settings',
+    showAdvancedSettings: 'Show advanced settings',
+    hideAdvancedSettings: 'Hide advanced settings',
+    currentValue: 'Current',
     profileLabel: 'Profile label',
     apiPreset: 'Provider preset',
     endpointMode: 'Endpoint mode',
@@ -423,6 +454,9 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     apiKey: 'API key',
     model: 'Model',
     reasoningEffort: 'Reasoning effort',
+    fetchReasoningEfforts: 'Fetch efforts',
+    reasoningEffortsReady: 'Reasoning effort choices were updated for this endpoint and model.',
+    reasoningEffortsUnavailable: 'No reasoning effort parameter was detected for this model. Keep it off.',
     reasoningEffortCustomPlaceholder: 'Enter another value, e.g. medium/high',
     reasoningEffortInvalid: 'Invalid reasoning effort. Not applied.',
     responseStorage: 'Server response storage',
@@ -445,6 +479,11 @@ const COPY: Record<UiLanguage, LanguageCopy> = {
     renameSessionPlaceholder: 'Enter a new session name',
     exportSession: 'Copy export',
     copiedSessionExport: 'Copied as Markdown.',
+    selectSessions: 'Select',
+    cancelSelection: 'Cancel selection',
+    copySelectedSessions: 'Copy selected',
+    latestSessionsFirst: 'Latest chats first',
+    selectedSessionsCount: (count) => `${count} selected`,
     done: 'Done',
     delete: 'Delete',
     deleteSessionTitle: 'Delete session?',
@@ -504,6 +543,7 @@ function createConversation(profile: ApiProfile, defaultTitle: string): Conversa
     assistantKind: classifyModel(profile.model),
     createdAt: now,
     updatedAt: now,
+    pinned: false,
     previousResponseId: null,
     messages: [],
   };
@@ -525,6 +565,15 @@ function upsertConversation(
 ): ConversationRecord[] {
   const next = conversations.filter((item) => item.id !== conversation.id);
   return [conversation, ...next];
+}
+
+function sortConversationsForList(conversations: ConversationRecord[]): ConversationRecord[] {
+  return [...conversations].sort((a, b) => {
+    if (a.pinned !== b.pinned) {
+      return a.pinned ? -1 : 1;
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
 }
 
 function getConversationAttachments(conversation: ConversationRecord): AttachmentRecord[] {
@@ -575,6 +624,35 @@ function applyApiPreset(profile: ApiProfile, preset: (typeof API_PRESETS)[number
   };
 }
 
+function inferReasoningEffortOptions(profile: ApiProfile): ReasoningEffort[] {
+  const model = profile.model.trim().toLowerCase();
+  if (!modelSupportsReasoning(profile.model)) {
+    return ['none'];
+  }
+
+  if (profile.apiProtocol === 'chatCompletions') {
+    if (model.startsWith('deepseek-v4') || model === 'deepseek-reasoner') {
+      return ['none', 'high', 'xhigh'];
+    }
+    return ['none'];
+  }
+
+  if (model.startsWith('gpt-5') || /^o\d/.test(model)) {
+    return REASONING_EFFORT_OPTIONS;
+  }
+
+  return ['none'];
+}
+
+function profileHasAdvancedValues(profile: ApiProfile): boolean {
+  return (
+    profile.projectId.trim().length > 0 ||
+    profile.organization.trim().length > 0 ||
+    profile.systemPrompt.trim().length > 0 ||
+    profile.storeResponses
+  );
+}
+
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -602,6 +680,41 @@ function formatDateTime(value: string): string {
     return value;
   }
   return date.toLocaleString();
+}
+
+function formatRelativeTime(value: string, language: UiLanguage): string {
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  if (Number.isNaN(timestamp)) {
+    return value;
+  }
+
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) {
+    return language === 'zh' ? '刚刚' : 'Just now';
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return language === 'zh' ? `${minutes}分钟前` : `${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return language === 'zh' ? `${hours}小时前` : `${hours}h ago`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return language === 'zh' ? `${days}天前` : `${days}d ago`;
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatConversationListMeta(conversation: ConversationRecord, language: UiLanguage): string {
+  const messageText =
+    language === 'zh'
+      ? `${conversation.messages.length}条消息`
+      : `${conversation.messages.length} messages`;
+  return `${conversation.model} | ${messageText} | ${formatRelativeTime(conversation.updatedAt, language)}`;
 }
 
 function formatConversationMarkdown(conversation: ConversationRecord): string {
@@ -645,12 +758,17 @@ export default function App() {
   const streamingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
   const streamingConversationIdRef = useRef<string | null>(null);
-  const reasoningEffortNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handledSharedImageUrisRef = useRef(new Set<string>());
   const sessionDrawerTranslateX = useRef(new Animated.Value(0)).current;
   const sessionDrawerHiddenOffsetRef = useRef(360);
+  const sessionDrawerAnimationIdRef = useRef(0);
+  const sessionDrawerCloseFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawerGestureOpeningRef = useRef(false);
+  const drawerGestureFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsPanelTranslateX = useRef(new Animated.Value(0)).current;
   const settingsPanelHiddenOffsetRef = useRef(360);
+  const settingsPanelAnimationIdRef = useRef(0);
+  const settingsPanelCloseFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsReturnTargetRef = useRef<'chat' | 'drawer'>('chat');
   const settingsTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const settingsTouchHasClosedRef = useRef(false);
@@ -673,10 +791,14 @@ export default function App() {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('root');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
+  const [sessionSelectionMode, setSessionSelectionMode] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [sessionContextMenuId, setSessionContextMenuId] = useState<string | null>(null);
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [draftSessionTitle, setDraftSessionTitle] = useState('');
-  const [reasoningEffortDraft, setReasoningEffortDraft] = useState('');
-  const [reasoningEffortNotice, setReasoningEffortNotice] = useState('');
+  const [advancedApiSettingsOpen, setAdvancedApiSettingsOpen] = useState(false);
+  const [reasoningEffortOptions, setReasoningEffortOptions] = useState<ReasoningEffort[]>(['none']);
+  const [reasoningEffortsFetched, setReasoningEffortsFetched] = useState(false);
 
   const uiLanguage = persisted.uiLanguage;
   const copy = COPY[uiLanguage];
@@ -685,24 +807,42 @@ export default function App() {
     persisted.conversations.find((item) => item.id === persisted.activeConversationId) ?? null;
   const activeSessionTitle = activeConversation?.title || copy.noSession;
   const normalizedSessionSearch = normalizeSearchText(sessionSearchQuery);
-  const visibleConversations = persisted.conversations.filter((conversation) =>
+  const sortedConversations = sortConversationsForList(persisted.conversations);
+  const visibleConversations = sortedConversations.filter((conversation) =>
     conversationMatchesQuery(conversation, normalizedSessionSearch)
   );
   const renamingConversation =
     persisted.conversations.find((conversation) => conversation.id === renamingConversationId) ?? null;
+  const sessionContextConversation =
+    persisted.conversations.find((conversation) => conversation.id === sessionContextMenuId) ?? null;
   sessionDrawerHiddenOffsetRef.current = Math.max(windowWidth, 320);
   settingsPanelHiddenOffsetRef.current = Math.max(windowWidth, 320);
-  const sessionDrawerPanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 24 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.25,
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -70) {
+  const sessionDrawerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 14 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.18,
+        onPanResponderGrant: () => {
+          sessionDrawerTranslateX.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dx < 0) {
+            sessionDrawerTranslateX.setValue(Math.max(-sessionDrawerHiddenOffsetRef.current, gestureState.dx));
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -windowWidth * 0.22 || gestureState.vx < -0.75) {
+            closeSessionsDrawer();
+            return;
+          }
+          openSessionsDrawer();
+        },
+        onPanResponderTerminate: () => {
           closeSessionsDrawer();
-        }
-      },
-    })
-  ).current;
+        },
+      }),
+    [sessionDrawerTranslateX, windowWidth]
+  );
   const chatOpenDrawerPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -710,15 +850,57 @@ export default function App() {
           if (sessionsVisible || settingsVisible || apiProfilesVisible || modelPickerVisible || chatMenuVisible) {
             return false;
           }
-          return gestureState.dx > 82 && gestureState.dx > Math.abs(gestureState.dy) * 1.65;
+          return gestureState.dx > 16 && gestureState.dx > Math.abs(gestureState.dy) * 1.35;
+        },
+        onPanResponderGrant: () => {
+          drawerGestureOpeningRef.current = true;
+          if (drawerGestureFallbackRef.current) {
+            clearTimeout(drawerGestureFallbackRef.current);
+          }
+          drawerGestureFallbackRef.current = setTimeout(() => {
+            if (drawerGestureOpeningRef.current) {
+              drawerGestureOpeningRef.current = false;
+              closeSessionsDrawer();
+            }
+          }, 900);
+          sessionDrawerTranslateX.stopAnimation();
+          setSessionsVisible(true);
+          sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextX = Math.min(0, -sessionDrawerHiddenOffsetRef.current + Math.max(0, gestureState.dx));
+          sessionDrawerTranslateX.setValue(nextX);
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx > 82 && gestureState.dx > Math.abs(gestureState.dy) * 1.65) {
-            setSessionsVisible(true);
+          drawerGestureOpeningRef.current = false;
+          if (drawerGestureFallbackRef.current) {
+            clearTimeout(drawerGestureFallbackRef.current);
+            drawerGestureFallbackRef.current = null;
           }
+          if (gestureState.dx > windowWidth * 0.22 || gestureState.vx > 0.75) {
+            openSessionsDrawer();
+            return;
+          }
+          closeSessionsDrawer();
+        },
+        onPanResponderTerminate: () => {
+          drawerGestureOpeningRef.current = false;
+          if (drawerGestureFallbackRef.current) {
+            clearTimeout(drawerGestureFallbackRef.current);
+            drawerGestureFallbackRef.current = null;
+          }
+          closeSessionsDrawer();
         },
       }),
-    [apiProfilesVisible, chatMenuVisible, modelPickerVisible, sessionsVisible, settingsVisible]
+    [
+      apiProfilesVisible,
+      chatMenuVisible,
+      modelPickerVisible,
+      sessionDrawerTranslateX,
+      sessionsVisible,
+      settingsVisible,
+      windowWidth,
+    ]
   );
 
   useEffect(() => {
@@ -743,16 +925,42 @@ export default function App() {
   }, [persisted, ready]);
 
   useEffect(() => {
+    if (!ready || persisted.conversations.length === 0) {
+      return;
+    }
+    if (
+      persisted.activeConversationId &&
+      persisted.conversations.some((conversation) => conversation.id === persisted.activeConversationId)
+    ) {
+      return;
+    }
+
+    setPersisted((current) => {
+      if (
+        current.conversations.length === 0 ||
+        (current.activeConversationId &&
+          current.conversations.some((conversation) => conversation.id === current.activeConversationId))
+      ) {
+        return current;
+      }
+      const newest = [...current.conversations].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )[0];
+      return {
+        ...current,
+        activeConversationId: newest.id,
+      };
+    });
+  }, [persisted.activeConversationId, persisted.conversations, ready]);
+
+  useEffect(() => {
     if (!sessionsVisible) {
       return;
     }
-    const hiddenOffset = sessionDrawerHiddenOffsetRef.current;
-    sessionDrawerTranslateX.setValue(-hiddenOffset);
-    Animated.timing(sessionDrawerTranslateX, {
-      toValue: 0,
-      duration: 190,
-      useNativeDriver: true,
-    }).start();
+    if (drawerGestureOpeningRef.current) {
+      return;
+    }
+    openSessionsDrawer();
   }, [sessionDrawerTranslateX, sessionsVisible, windowWidth]);
 
   useEffect(() => {
@@ -787,15 +995,30 @@ export default function App() {
 
   useEffect(
     () => () => {
-      if (reasoningEffortNoticeTimerRef.current) {
-        clearTimeout(reasoningEffortNoticeTimerRef.current);
-      }
       if (streamingFlushTimerRef.current) {
         clearTimeout(streamingFlushTimerRef.current);
+      }
+      if (sessionDrawerCloseFallbackRef.current) {
+        clearTimeout(sessionDrawerCloseFallbackRef.current);
+      }
+      if (settingsPanelCloseFallbackRef.current) {
+        clearTimeout(settingsPanelCloseFallbackRef.current);
+      }
+      if (drawerGestureFallbackRef.current) {
+        clearTimeout(drawerGestureFallbackRef.current);
       }
     },
     []
   );
+
+  useEffect(() => {
+    if (reasoningEffortsFetched) {
+      setReasoningEffortOptions(inferReasoningEffortOptions(draftProfile));
+      return;
+    }
+
+    setReasoningEffortOptions(uniqueStrings(['none', draftProfile.reasoningEffort]) as ReasoningEffort[]);
+  }, [draftProfile.apiProtocol, draftProfile.model, draftProfile.reasoningEffort, reasoningEffortsFetched]);
 
   useEffect(() => {
     if (!ready || Platform.OS !== 'android') return;
@@ -873,28 +1096,51 @@ export default function App() {
 
   async function openSettings(returnTarget: 'chat' | 'drawer' = 'chat') {
     setChatMenuVisible(false);
+    const animationId = settingsPanelAnimationIdRef.current + 1;
+    settingsPanelAnimationIdRef.current = animationId;
+    if (settingsPanelCloseFallbackRef.current) {
+      clearTimeout(settingsPanelCloseFallbackRef.current);
+      settingsPanelCloseFallbackRef.current = null;
+    }
+    settingsPanelTranslateX.stopAnimation();
     settingsReturnTargetRef.current = returnTarget;
     setDraftProfile(activeProfile);
-    resetReasoningEffortInput();
+    resetApiProfileEditor(activeProfile);
     setSettingsSection('root');
     setSettingsVisible(true);
     setApiKey(await loadProfileApiKey(activeProfile.id));
   }
 
-  function closeSettingsPanel() {
-    Animated.timing(settingsPanelTranslateX, {
-      toValue: settingsPanelHiddenOffsetRef.current,
-      duration: 160,
-      useNativeDriver: true,
-    }).start(() => {
-      const shouldReturnToDrawer = settingsReturnTargetRef.current === 'drawer';
+  function closeSettingsPanel(options: { returnToDrawer?: boolean } = {}) {
+    const canReturnToDrawer = options.returnToDrawer ?? true;
+    const animationId = settingsPanelAnimationIdRef.current + 1;
+    settingsPanelAnimationIdRef.current = animationId;
+    if (settingsPanelCloseFallbackRef.current) {
+      clearTimeout(settingsPanelCloseFallbackRef.current);
+    }
+    settingsPanelTranslateX.stopAnimation();
+    const finishClose = () => {
+      if (settingsPanelAnimationIdRef.current !== animationId) {
+        return;
+      }
+      if (settingsPanelCloseFallbackRef.current) {
+        clearTimeout(settingsPanelCloseFallbackRef.current);
+        settingsPanelCloseFallbackRef.current = null;
+      }
+      const shouldReturnToDrawer = canReturnToDrawer && settingsReturnTargetRef.current === 'drawer';
       if (shouldReturnToDrawer) {
         setSessionsVisible(true);
       }
       setSettingsVisible(false);
       setSettingsSection('root');
       settingsReturnTargetRef.current = 'chat';
-    });
+    };
+    settingsPanelCloseFallbackRef.current = setTimeout(finishClose, 260);
+    Animated.timing(settingsPanelTranslateX, {
+      toValue: settingsPanelHiddenOffsetRef.current,
+      duration: 160,
+      useNativeDriver: true,
+    }).start(finishClose);
   }
 
   function handleSettingsTouchStart(event: GestureResponderEvent) {
@@ -937,14 +1183,14 @@ export default function App() {
   function openApiProfiles() {
     setDraftProfile(activeProfile);
     loadProfileApiKey(activeProfile.id).then(setApiKey).catch(() => setApiKey(''));
-    resetReasoningEffortInput();
+    resetApiProfileEditor(activeProfile);
     setApiProfilesVisible(true);
   }
 
   async function selectDraftApiProfile(profile: ApiProfile) {
     setDraftProfile(profile);
     setApiKey(await loadProfileApiKey(profile.id));
-    resetReasoningEffortInput();
+    resetApiProfileEditor(profile);
   }
 
   function createNewApiProfile() {
@@ -959,7 +1205,7 @@ export default function App() {
     }));
     setDraftProfile(profile);
     setApiKey('');
-    resetReasoningEffortInput();
+    resetApiProfileEditor(profile);
   }
 
   function applyUiLanguage(language: UiLanguage) {
@@ -990,48 +1236,40 @@ export default function App() {
     }
   }
 
-  function resetReasoningEffortInput() {
-    setReasoningEffortDraft('');
-    setReasoningEffortNotice('');
-    if (reasoningEffortNoticeTimerRef.current) {
-      clearTimeout(reasoningEffortNoticeTimerRef.current);
-      reasoningEffortNoticeTimerRef.current = null;
+  function resetApiProfileEditor(profile: ApiProfile) {
+    setAdvancedApiSettingsOpen(profileHasAdvancedValues(profile));
+    setReasoningEffortOptions(uniqueStrings(['none', profile.reasoningEffort]) as ReasoningEffort[]);
+    setReasoningEffortsFetched(false);
+  }
+
+  function refreshReasoningEffortOptions(profile: ApiProfile = draftProfile) {
+    const options = inferReasoningEffortOptions(profile);
+    setReasoningEffortOptions(options);
+    setReasoningEffortsFetched(true);
+
+    if (!options.includes(profile.reasoningEffort)) {
+      setDraftProfile((current) => ({ ...current, reasoningEffort: options[0] ?? 'none' }));
     }
   }
 
-  function showReasoningEffortInvalid() {
-    setReasoningEffortNotice(copy.reasoningEffortInvalid);
-    if (reasoningEffortNoticeTimerRef.current) {
-      clearTimeout(reasoningEffortNoticeTimerRef.current);
-    }
-    reasoningEffortNoticeTimerRef.current = setTimeout(() => {
-      setReasoningEffortNotice('');
-      reasoningEffortNoticeTimerRef.current = null;
-    }, 2600);
+  function updateDraftProfileWithReasoningReset(updater: (current: ApiProfile) => ApiProfile) {
+    setReasoningEffortsFetched(false);
+    setDraftProfile(updater);
   }
 
-  function commitReasoningEffortInput() {
-    const normalized = reasoningEffortDraft.trim().toLowerCase() as ReasoningEffort;
-    if (!normalized) {
-      return;
-    }
-
-    if (REASONING_EFFORT_OPTIONS.includes(normalized)) {
-      setDraftProfile((current) => ({ ...current, reasoningEffort: normalized }));
-      resetReasoningEffortInput();
-      return;
-    }
-
-    showReasoningEffortInvalid();
+  function applyReasoningEffort(effort: ReasoningEffort) {
+    setDraftProfile((current) => ({ ...current, reasoningEffort: effort }));
+    setReasoningEffortOptions((current) => uniqueStrings([effort, ...current]) as ReasoningEffort[]);
   }
 
-  function handleReasoningEffortDraftChange(value: string) {
-    setReasoningEffortDraft(value);
-    const normalized = value.trim().toLowerCase() as ReasoningEffort;
-    if (REASONING_EFFORT_OPTIONS.includes(normalized)) {
-      setDraftProfile((current) => ({ ...current, reasoningEffort: normalized }));
-      resetReasoningEffortInput();
-    }
+  function getAdvancedApiSummary(profile: ApiProfile): string {
+    const activeItems = [
+      profile.storeResponses ? copy.storageEnabled : copy.storageDisabled,
+      profile.projectId ? copy.projectId : '',
+      profile.organization ? copy.organization : '',
+      profile.systemPrompt ? copy.systemPrompt : '',
+    ];
+    return activeItems.filter(Boolean).join(' | ');
   }
 
   function openExternalUrl(url: string) {
@@ -1432,6 +1670,119 @@ export default function App() {
     }
   }
 
+  async function regenerateAssistantMessage(messageId: string) {
+    if (sending || !activeConversation) {
+      return;
+    }
+    if (!apiKey.trim()) {
+      openSettings();
+      Alert.alert(copy.apiKeyRequiredTitle, copy.apiKeyRequiredMessage);
+      return;
+    }
+
+    const assistantIndex = activeConversation.messages.findIndex(
+      (message) => message.id === messageId && message.role === 'assistant'
+    );
+    if (assistantIndex <= 0) {
+      return;
+    }
+
+    let userIndex = assistantIndex - 1;
+    while (userIndex >= 0 && activeConversation.messages[userIndex].role !== 'user') {
+      userIndex -= 1;
+    }
+    if (userIndex < 0) {
+      return;
+    }
+
+    const nextUserMessage = activeConversation.messages[userIndex];
+    const previousMessages = activeConversation.messages.slice(0, userIndex);
+    const preservedMessages = activeConversation.messages.slice(0, userIndex + 1);
+    const removedMessages = activeConversation.messages.slice(userIndex + 1);
+    const previousResponseId =
+      [...previousMessages].reverse().find((message) => message.role === 'assistant' && message.responseId)?.responseId ??
+      null;
+    const contextConversation: ConversationRecord = {
+      ...activeConversation,
+      messages: previousMessages,
+      previousResponseId,
+    };
+    const streamingAssistantMessage = createAssistantMessage('', '');
+    const optimisticConversation: ConversationRecord = {
+      ...activeConversation,
+      model: activeProfile.model,
+      assistantKind: classifyModel(activeProfile.model),
+      updatedAt: new Date().toISOString(),
+      messages: [...preservedMessages, streamingAssistantMessage],
+    };
+
+    await deleteAttachmentRecords(removedMessages.flatMap((message) => message.attachments)).catch(() => undefined);
+    updateConversations(upsertConversation(persisted.conversations, optimisticConversation), activeConversation.id);
+    setChatMenuVisible(false);
+    setAttachmentMenuVisible(false);
+    setSending(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    streamingTextRef.current = '';
+    streamingConversationIdRef.current = activeConversation.id;
+    streamingMessageIdRef.current = streamingAssistantMessage.id;
+
+    try {
+      const turn = await createAssistantTurn({
+        profile: activeProfile,
+        apiKey: apiKey.trim(),
+        conversation: contextConversation,
+        nextUserMessage,
+        signal: abortController.signal,
+        onTextDelta: (delta) => {
+          streamingTextRef.current += delta;
+          scheduleStreamingFlush();
+        },
+      });
+      clearStreamingFlushTimer();
+      const assistantMessage: ChatMessage = {
+        ...streamingAssistantMessage,
+        text: turn.assistantText || streamingTextRef.current || '(empty response)',
+        responseId: turn.responseId,
+        attachments: turn.attachments,
+        createdAt: new Date().toISOString(),
+      };
+      const completedConversation: ConversationRecord = {
+        ...optimisticConversation,
+        previousResponseId: turn.responseId,
+        updatedAt: assistantMessage.createdAt,
+        messages: [...preservedMessages, assistantMessage],
+      };
+      updateConversations(upsertConversation(persisted.conversations, completedConversation), activeConversation.id);
+    } catch (error) {
+      clearStreamingFlushTimer();
+      const fallbackText = abortController.signal.aborted ? copy.generationStopped : 'Request failed.';
+      const regeneratedMessage: ChatMessage = {
+        ...streamingAssistantMessage,
+        text: streamingTextRef.current || fallbackText,
+        createdAt: new Date().toISOString(),
+        error: abortController.signal.aborted ? undefined : formatApiError(error),
+      };
+      const failedConversation: ConversationRecord = {
+        ...optimisticConversation,
+        updatedAt: regeneratedMessage.createdAt,
+        messages: [...preservedMessages, regeneratedMessage],
+      };
+      updateConversations(upsertConversation(persisted.conversations, failedConversation), activeConversation.id);
+      if (!abortController.signal.aborted) {
+        Alert.alert(copy.sendFailed, regeneratedMessage.error ?? copy.sendFailed);
+      }
+    } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
+      streamingConversationIdRef.current = null;
+      streamingMessageIdRef.current = null;
+      streamingTextRef.current = '';
+      setSending(false);
+    }
+  }
+
   async function createNewSession() {
     await deleteAttachmentRecords(pendingAttachments).catch(() => undefined);
     const conversation = createConversation(activeProfile, copy.newSession);
@@ -1440,22 +1791,117 @@ export default function App() {
     setPendingAttachments([]);
     setAttachmentMenuVisible(false);
     setChatMenuVisible(false);
-    setSessionsVisible(false);
-    setSettingsVisible(false);
+    closeSessionsDrawer(false);
+    closeSettingsPanel({ returnToDrawer: false });
   }
 
-  function closeSessionsDrawer() {
+  function openSessionsDrawer() {
+    const animationId = sessionDrawerAnimationIdRef.current + 1;
+    sessionDrawerAnimationIdRef.current = animationId;
+    setChatMenuVisible(false);
+    setAttachmentMenuVisible(false);
+    if (sessionDrawerCloseFallbackRef.current) {
+      clearTimeout(sessionDrawerCloseFallbackRef.current);
+      sessionDrawerCloseFallbackRef.current = null;
+    }
+    sessionDrawerTranslateX.stopAnimation();
+    if (!sessionsVisible) {
+      sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
+    }
+    setSessionsVisible(true);
+    Animated.timing(sessionDrawerTranslateX, {
+      toValue: 0,
+      duration: 160,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && sessionDrawerAnimationIdRef.current === animationId) {
+        sessionDrawerTranslateX.setValue(0);
+      }
+    });
+  }
+
+  function closeSessionsDrawer(animate = true) {
+    const animationId = sessionDrawerAnimationIdRef.current + 1;
+    sessionDrawerAnimationIdRef.current = animationId;
+    drawerGestureOpeningRef.current = false;
+    if (drawerGestureFallbackRef.current) {
+      clearTimeout(drawerGestureFallbackRef.current);
+      drawerGestureFallbackRef.current = null;
+    }
+    if (sessionDrawerCloseFallbackRef.current) {
+      clearTimeout(sessionDrawerCloseFallbackRef.current);
+    }
+    sessionDrawerTranslateX.stopAnimation();
+    const finishClose = () => {
+      if (sessionDrawerAnimationIdRef.current !== animationId) {
+        return;
+      }
+      if (sessionDrawerCloseFallbackRef.current) {
+        clearTimeout(sessionDrawerCloseFallbackRef.current);
+        sessionDrawerCloseFallbackRef.current = null;
+      }
+      sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
+      setSessionsVisible(false);
+      setSessionSelectionMode(false);
+      setSelectedSessionIds([]);
+    };
+    if (!animate) {
+      finishClose();
+      return;
+    }
+    sessionDrawerCloseFallbackRef.current = setTimeout(finishClose, 260);
     Animated.timing(sessionDrawerTranslateX, {
       toValue: -sessionDrawerHiddenOffsetRef.current,
       duration: 160,
       useNativeDriver: true,
-    }).start(() => {
-      setSessionsVisible(false);
-    });
+    }).start(finishClose);
   }
 
   function openSettingsFromSessions() {
     void openSettings('drawer');
+  }
+
+  function toggleSessionSelection(conversationId: string) {
+    setSelectedSessionIds((current) =>
+      current.includes(conversationId)
+        ? current.filter((id) => id !== conversationId)
+        : [...current, conversationId]
+    );
+  }
+
+  function toggleSessionSelectionMode() {
+    setSessionSelectionMode((current) => {
+      if (current) {
+        setSelectedSessionIds([]);
+      }
+      return !current;
+    });
+  }
+
+  async function copySelectedSessionExports() {
+    const selected = sortedConversations.filter((conversation) => selectedSessionIds.includes(conversation.id));
+    if (selected.length === 0) {
+      return;
+    }
+    await Clipboard.setStringAsync(selected.map(formatConversationMarkdown).join('\n\n---\n\n'));
+    Alert.alert(copy.copySelectedSessions, copy.copiedSessionExport);
+    setSessionSelectionMode(false);
+    setSelectedSessionIds([]);
+  }
+
+  function togglePinConversation(conversationId: string) {
+    setPersisted((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              pinned: !conversation.pinned,
+            }
+          : conversation
+      ),
+    }));
+    setSessionContextMenuId(null);
   }
 
   async function shareActiveConversation() {
@@ -1478,11 +1924,17 @@ export default function App() {
   }
 
   function openConversation(conversationId: string) {
+    if (sessionSelectionMode) {
+      toggleSessionSelection(conversationId);
+      return;
+    }
     shouldScrollToBottomRef.current = true;
     setPersisted((current) => ({
       ...current,
       activeConversationId: conversationId,
     }));
+    setSelectedSessionIds([]);
+    setSessionSelectionMode(false);
     closeSessionsDrawer();
   }
 
@@ -1503,6 +1955,7 @@ export default function App() {
   }
 
   function promptRenameConversation(conversation: ConversationRecord) {
+    setSessionContextMenuId(null);
     setRenamingConversationId(conversation.id);
     setDraftSessionTitle(conversation.title);
   }
@@ -1533,11 +1986,13 @@ export default function App() {
     const conversations = persisted.conversations.filter((item) => item.id !== conversationId);
     const nextActiveId =
       persisted.activeConversationId === conversationId ? conversations[0]?.id ?? null : persisted.activeConversationId;
+    setSelectedSessionIds((current) => current.filter((id) => id !== conversationId));
     updateConversations(conversations, nextActiveId);
   }
 
   function confirmDeleteConversation(conversationId: string) {
-    Alert.alert(copy.deleteSessionTitle, copy.deleteSessionMessage, [
+    setSessionContextMenuId(null);
+    Alert.alert(copy.deleteSessionTitle, uiLanguage === 'zh' ? '确定删除该会话？' : 'Delete this conversation?', [
       { text: copy.cancel, style: 'cancel' },
       {
         text: copy.delete,
@@ -1564,8 +2019,8 @@ export default function App() {
       setApiKey('');
       setComposerText('');
       setPendingAttachments([]);
-      setSettingsVisible(false);
-      setSessionsVisible(false);
+      closeSettingsPanel({ returnToDrawer: false });
+      closeSessionsDrawer(false);
       setApiProfilesVisible(false);
       setModelPickerVisible(false);
       setSettingsSection('root');
@@ -1661,24 +2116,27 @@ export default function App() {
 
   return (
     <LinearGradient colors={['#FFFFFF', '#F6F8FB', '#EEF3F8']} style={styles.root}>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 8}
+          keyboardVerticalOffset={0}
           style={styles.flex}
         >
           <View style={styles.topBar}>
             <Pressable
               style={styles.iconAction}
-              onPress={() => setSessionsVisible(true)}
+              onPress={openSessionsDrawer}
               accessibilityRole="button"
               accessibilityLabel={copy.openSessions}
             >
               <Text style={styles.menuIconText}>☰</Text>
             </Pressable>
             <Pressable style={styles.sessionSwitcher} onPress={openModelPicker}>
-              <Text style={styles.title} numberOfLines={1}>{activeProfile.model}</Text>
+              <View style={styles.modelPill}>
+                <Text style={styles.title} numberOfLines={1}>{activeProfile.model}</Text>
+                <Text style={styles.modelPillChevron}>v</Text>
+              </View>
               <Text style={styles.sessionLine} numberOfLines={1}>
                 {activeSessionTitle} · {activeProfile.label}
               </Text>
@@ -1714,7 +2172,6 @@ export default function App() {
                   }}
                   disabled={!activeConversation}
                 >
-                  <Text style={styles.chatMenuIcon}>S</Text>
                   <Text style={styles.chatMenuText}>{uiLanguage === 'zh' ? '分享' : 'Share'}</Text>
                 </Pressable>
                 <Pressable
@@ -1722,7 +2179,6 @@ export default function App() {
                   onPress={confirmDeleteActiveConversation}
                   disabled={!activeConversation}
                 >
-                  <Text style={[styles.chatMenuIcon, styles.chatMenuDangerText]}>D</Text>
                   <Text style={[styles.chatMenuText, styles.chatMenuDangerText]}>{copy.delete}</Text>
                 </Pressable>
               </View>
@@ -1744,6 +2200,9 @@ export default function App() {
                       key={message.id}
                       message={message}
                       language={uiLanguage}
+                      onRegenerate={(messageId) => {
+                        void regenerateAssistantMessage(messageId);
+                      }}
                     />
                   ))
                 ) : (
@@ -1838,7 +2297,7 @@ export default function App() {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      <Modal visible={settingsVisible} animationType="none" onRequestClose={closeSettingsPanel}>
+      <Modal visible={settingsVisible} animationType="none" onRequestClose={() => closeSettingsPanel()}>
         <Animated.View
           style={[styles.settingsScreen, { transform: [{ translateX: settingsPanelTranslateX }] }]}
           onStartShouldSetResponderCapture={() => false}
@@ -2024,36 +2483,35 @@ export default function App() {
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
             >
-              <View style={styles.profileList}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileChipRow}>
                 {persisted.profiles.map((profile) => {
                   const isActive = profile.id === persisted.activeProfileId;
                   const isEditing = profile.id === draftProfile.id;
                   return (
                     <Pressable
                       key={profile.id}
-                      style={[
-                        styles.profileItem,
-                        isEditing && styles.profileItemSelected,
-                      ]}
+                      style={[styles.profileChip, isEditing && styles.profileChipSelected]}
                       onPress={() => {
                         void selectDraftApiProfile(profile);
                       }}
                     >
-                      <View style={styles.profileItemMain}>
-                        <Text style={styles.profileItemTitle}>{profile.label}</Text>
-                        <Text style={styles.profileItemSubtitle} numberOfLines={1}>
-                          {profile.model} · {profile.baseUrl}
-                        </Text>
-                      </View>
-                      <Text style={[styles.profileStateText, isActive && styles.profileStateActive]}>
-                        {isActive ? copy.activeApiProfile : isEditing ? copy.selectedApiProfile : ''}
+                      <Text style={[styles.profileChipTitle, isEditing && styles.profileChipTitleSelected]}>
+                        {profile.label}
+                      </Text>
+                      <Text style={[styles.profileChipMeta, isEditing && styles.profileChipMetaSelected]} numberOfLines={1}>
+                        {isActive ? copy.activeApiProfile : profile.model}
                       </Text>
                     </Pressable>
                   );
                 })}
-              </View>
+              </ScrollView>
 
-              <Text style={styles.sectionLabel}>{copy.selectedApiProfile}</Text>
+              <View style={styles.formSectionHeader}>
+                <Text style={styles.sectionLabel}>{copy.basicApiSettings}</Text>
+                <Text style={styles.sectionValue} numberOfLines={1}>
+                  {draftProfile.model}
+                </Text>
+              </View>
               <Text style={styles.fieldLabel}>{copy.profileLabel}</Text>
               <TextInput
                 value={draftProfile.label}
@@ -2074,7 +2532,7 @@ export default function App() {
                     <Pressable
                       key={preset.id}
                       style={[styles.suggestionChip, selected && styles.selectedChip]}
-                      onPress={() => setDraftProfile((current) => applyApiPreset(current, preset))}
+                      onPress={() => updateDraftProfileWithReasoningReset((current) => applyApiPreset(current, preset))}
                     >
                       <Text style={[styles.suggestionChipText, selected && styles.selectedChipText]}>
                         {preset.label}
@@ -2090,7 +2548,7 @@ export default function App() {
                   <Pressable
                     key={protocol}
                     style={[styles.suggestionChip, draftProfile.apiProtocol === protocol && styles.selectedChip]}
-                    onPress={() => setDraftProfile((current) => ({ ...current, apiProtocol: protocol }))}
+                    onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, apiProtocol: protocol }))}
                   >
                     <Text
                       style={[
@@ -2131,7 +2589,7 @@ export default function App() {
               <Text style={styles.fieldLabel}>{copy.model}</Text>
               <TextInput
                 value={draftProfile.model}
-                onChangeText={(value) => setDraftProfile((current) => ({ ...current, model: value }))}
+                onChangeText={(value) => updateDraftProfileWithReasoningReset((current) => ({ ...current, model: value }))}
                 style={styles.fieldInput}
                 autoCapitalize="none"
                 placeholder="gpt-5.4"
@@ -2153,7 +2611,7 @@ export default function App() {
                   <Pressable
                     key={model}
                     style={[styles.suggestionChip, draftProfile.model === model && styles.selectedChip]}
-                    onPress={() => setDraftProfile((current) => ({ ...current, model }))}
+                    onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, model }))}
                   >
                     <Text style={[styles.suggestionChipText, draftProfile.model === model && styles.selectedChipText]}>
                       {model}
@@ -2163,98 +2621,122 @@ export default function App() {
               </ScrollView>
               <Text style={styles.inlineHint}>{getModelHint(draftProfile.model, uiLanguage)}</Text>
 
-              <Text style={styles.fieldLabel}>{copy.reasoningEffort}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                {COMMON_REASONING_EFFORT_OPTIONS.map((effort) => (
-                  <Pressable
-                    key={effort}
-                    style={[styles.suggestionChip, draftProfile.reasoningEffort === effort && styles.selectedChip]}
-                    onPress={() => setDraftProfile((current) => ({ ...current, reasoningEffort: effort }))}
-                  >
-                    <Text
-                      style={[
-                        styles.suggestionChipText,
-                        draftProfile.reasoningEffort === effort && styles.selectedChipText,
-                      ]}
-                    >
-                      {effort}
+              <View style={styles.compactSettingCard}>
+                <View style={styles.compactSettingHeader}>
+                  <View style={styles.compactSettingTitleWrap}>
+                    <Text style={styles.compactSettingTitle}>{copy.reasoningEffort}</Text>
+                    <Text style={styles.compactSettingSubtitle}>
+                      {copy.currentValue}: {draftProfile.reasoningEffort}
                     </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <TextInput
-                value={reasoningEffortDraft}
-                onChangeText={handleReasoningEffortDraftChange}
-                onSubmitEditing={commitReasoningEffortInput}
-                onBlur={commitReasoningEffortInput}
-                style={styles.fieldInput}
-                autoCapitalize="none"
-                returnKeyType="done"
-                placeholder={copy.reasoningEffortCustomPlaceholder}
-                placeholderTextColor="#9BA7B7"
-              />
-              {!!reasoningEffortNotice && <Text style={styles.warningText}>{reasoningEffortNotice}</Text>}
-              <Text style={styles.inlineHint}>
-                {getReasoningEffortHint(draftProfile.model, draftProfile.reasoningEffort, uiLanguage)}
-              </Text>
-
-              {draftProfile.apiProtocol === 'responses' && (
-                <>
-                  <Text style={styles.fieldLabel}>{copy.responseStorage}</Text>
-                  <View style={styles.binaryRow}>
-                    <Pressable
-                      style={[styles.binaryChip, draftProfile.storeResponses && styles.selectedChip]}
-                      onPress={() => setDraftProfile((current) => ({ ...current, storeResponses: true }))}
-                    >
-                      <Text style={[styles.binaryChipText, draftProfile.storeResponses && styles.selectedChipText]}>
-                        {copy.storageEnabled}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.binaryChip, !draftProfile.storeResponses && styles.selectedChip]}
-                      onPress={() => setDraftProfile((current) => ({ ...current, storeResponses: false }))}
-                    >
-                      <Text style={[styles.binaryChipText, !draftProfile.storeResponses && styles.selectedChipText]}>
-                        {copy.storageDisabled}
-                      </Text>
-                    </Pressable>
                   </View>
-                </>
+                  <Pressable style={styles.inlineUtilityButton} onPress={() => refreshReasoningEffortOptions(draftProfile)}>
+                    <Text style={styles.inlineUtilityButtonText}>{copy.fetchReasoningEfforts}</Text>
+                  </Pressable>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
+                  {reasoningEffortOptions.map((effort) => (
+                    <Pressable
+                      key={effort}
+                      style={[styles.suggestionChip, draftProfile.reasoningEffort === effort && styles.selectedChip]}
+                      onPress={() => applyReasoningEffort(effort)}
+                    >
+                      <Text
+                        style={[
+                          styles.suggestionChipText,
+                          draftProfile.reasoningEffort === effort && styles.selectedChipText,
+                        ]}
+                      >
+                        {effort}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Text style={styles.inlineHint}>
+                  {reasoningEffortsFetched
+                    ? inferReasoningEffortOptions(draftProfile).length > 1
+                      ? copy.reasoningEffortsReady
+                      : copy.reasoningEffortsUnavailable
+                    : getReasoningEffortHint(draftProfile.model, draftProfile.reasoningEffort, uiLanguage)}
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.advancedToggle}
+                onPress={() => setAdvancedApiSettingsOpen((current) => !current)}
+              >
+                <View style={styles.advancedToggleTextWrap}>
+                  <Text style={styles.advancedToggleTitle}>{copy.advancedApiSettings}</Text>
+                  <Text style={styles.advancedToggleSubtitle} numberOfLines={1}>
+                    {getAdvancedApiSummary(draftProfile)}
+                  </Text>
+                  {/*
+                    {draftProfile.storeResponses ? copy.storageEnabled : copy.storageDisabled}
+                    {draftProfile.projectId ? ` · ${copy.projectId}` : ''}
+                    {draftProfile.organization ? ` · ${copy.organization}` : ''}
+                    {draftProfile.systemPrompt ? ` · ${copy.systemPrompt}` : ''}
+                  */}
+                </View>
+                <Text style={styles.advancedToggleAction}>
+                  {advancedApiSettingsOpen ? copy.hideAdvancedSettings : copy.showAdvancedSettings}
+                </Text>
+              </Pressable>
+
+              {advancedApiSettingsOpen && (
+                <View style={styles.advancedPanel}>
+                  {draftProfile.apiProtocol === 'responses' && (
+                    <>
+                      <View style={styles.switchRow}>
+                        <View style={styles.switchTextWrap}>
+                          <Text style={styles.switchTitle}>{copy.responseStorage}</Text>
+                          <Text style={styles.switchSubtitle}>
+                            {draftProfile.storeResponses ? copy.storageEnabled : copy.storageDisabled}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={[styles.compactSwitch, draftProfile.storeResponses && styles.compactSwitchOn]}
+                          onPress={() => setDraftProfile((current) => ({ ...current, storeResponses: !current.storeResponses }))}
+                        >
+                          <View style={[styles.compactSwitchThumb, draftProfile.storeResponses && styles.compactSwitchThumbOn]} />
+                        </Pressable>
+                      </View>
+                      <Text style={styles.inlineHint}>
+                        {getProtocolStorageHint(draftProfile.apiProtocol, draftProfile.storeResponses, uiLanguage)}
+                      </Text>
+                    </>
+                  )}
+
+                  <Text style={styles.fieldLabel}>{copy.projectId}</Text>
+                  <TextInput
+                    value={draftProfile.projectId}
+                    onChangeText={(value) => setDraftProfile((current) => ({ ...current, projectId: value }))}
+                    style={styles.fieldInput}
+                    autoCapitalize="none"
+                    placeholder="Optional"
+                    placeholderTextColor="#9BA7B7"
+                  />
+
+                  <Text style={styles.fieldLabel}>{copy.organization}</Text>
+                  <TextInput
+                    value={draftProfile.organization}
+                    onChangeText={(value) => setDraftProfile((current) => ({ ...current, organization: value }))}
+                    style={styles.fieldInput}
+                    autoCapitalize="none"
+                    placeholder="Optional"
+                    placeholderTextColor="#9BA7B7"
+                  />
+
+                  <Text style={styles.fieldLabel}>{copy.systemPrompt}</Text>
+                  <TextInput
+                    value={draftProfile.systemPrompt}
+                    onChangeText={(value) => setDraftProfile((current) => ({ ...current, systemPrompt: value }))}
+                    style={[styles.fieldInput, styles.fieldInputMultiline]}
+                    multiline
+                    placeholder="Optional long-lived instruction"
+                    placeholderTextColor="#9BA7B7"
+                  />
+                  <Text style={styles.inlineHint}>{copy.advancedConfigHint}</Text>
+                </View>
               )}
-              <Text style={styles.inlineHint}>
-                {getProtocolStorageHint(draftProfile.apiProtocol, draftProfile.storeResponses, uiLanguage)}
-              </Text>
-
-              <Text style={styles.fieldLabel}>{copy.projectId}</Text>
-              <TextInput
-                value={draftProfile.projectId}
-                onChangeText={(value) => setDraftProfile((current) => ({ ...current, projectId: value }))}
-                style={styles.fieldInput}
-                autoCapitalize="none"
-                placeholder="Optional"
-                placeholderTextColor="#9BA7B7"
-              />
-
-              <Text style={styles.fieldLabel}>{copy.organization}</Text>
-              <TextInput
-                value={draftProfile.organization}
-                onChangeText={(value) => setDraftProfile((current) => ({ ...current, organization: value }))}
-                style={styles.fieldInput}
-                autoCapitalize="none"
-                placeholder="Optional"
-                placeholderTextColor="#9BA7B7"
-              />
-
-              <Text style={styles.fieldLabel}>{copy.systemPrompt}</Text>
-              <TextInput
-                value={draftProfile.systemPrompt}
-                onChangeText={(value) => setDraftProfile((current) => ({ ...current, systemPrompt: value }))}
-                style={[styles.fieldInput, styles.fieldInputMultiline]}
-                multiline
-                placeholder="Optional long-lived instruction"
-                placeholderTextColor="#9BA7B7"
-              />
-              <Text style={styles.inlineHint}>{copy.advancedConfigHint}</Text>
 
               <View style={styles.profileUtilityRow}>
                 <Pressable
@@ -2288,14 +2770,35 @@ export default function App() {
         </View>
       </Modal>
 
-      <Modal visible={sessionsVisible} animationType="none" onRequestClose={closeSessionsDrawer}>
+      <Modal visible={sessionsVisible} animationType="none" onRequestClose={() => closeSessionsDrawer()}>
         <Animated.View
           style={[styles.drawerBackdrop, { transform: [{ translateX: sessionDrawerTranslateX }] }]}
           {...sessionDrawerPanResponder.panHandlers}
         >
           <SafeAreaView style={styles.sessionDrawer}>
             <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>{copy.title}</Text>
+              <View style={styles.drawerHeaderTitleBlock}>
+                <Text style={styles.drawerTitle}>{copy.sessionsTitle}</Text>
+                <Text style={styles.drawerHeaderHint}>{copy.latestSessionsFirst}</Text>
+              </View>
+              <Pressable
+                style={[
+                  styles.drawerHeaderButton,
+                  sessionSelectionMode && styles.drawerHeaderButtonActive,
+                  persisted.conversations.length === 0 && styles.disabledAction,
+                ]}
+                onPress={toggleSessionSelectionMode}
+                disabled={persisted.conversations.length === 0}
+              >
+                <Text
+                  style={[
+                    styles.drawerHeaderButtonText,
+                    sessionSelectionMode && styles.drawerHeaderButtonTextActive,
+                  ]}
+                >
+                  {sessionSelectionMode ? copy.cancelSelection : copy.selectSessions}
+                </Text>
+              </Pressable>
             </View>
 
             <TextInput
@@ -2318,7 +2821,23 @@ export default function App() {
               </Pressable>
             </View>
 
-            <Text style={styles.drawerSectionLabel}>{copy.recordsSection}</Text>
+            <View style={styles.drawerSectionHeader}>
+              <Text style={styles.drawerSectionLabel}>{copy.recordsSection}</Text>
+              {sessionSelectionMode && (
+                <Pressable
+                  style={[styles.drawerCopyButton, selectedSessionIds.length === 0 && styles.disabledAction]}
+                  onPress={() => {
+                    void copySelectedSessionExports();
+                  }}
+                  disabled={selectedSessionIds.length === 0}
+                >
+                  <Text style={styles.drawerCopyButtonText}>{copy.copySelectedSessions}</Text>
+                </Pressable>
+              )}
+            </View>
+            {sessionSelectionMode && (
+              <Text style={styles.drawerSelectionText}>{copy.selectedSessionsCount(selectedSessionIds.length)}</Text>
+            )}
 
             <ScrollView
               style={styles.drawerHistoryScroll}
@@ -2334,32 +2853,42 @@ export default function App() {
               ) : (
                 visibleConversations.map((conversation) => {
                   const active = conversation.id === activeConversation?.id;
+                  const selected = selectedSessionIds.includes(conversation.id);
                   return (
-                    <View key={conversation.id} style={[styles.drawerSessionItem, active && styles.drawerSessionItemActive]}>
-                      <Pressable style={styles.sessionMeta} onPress={() => openConversation(conversation.id)}>
-                        <Text style={styles.drawerSessionTitle} numberOfLines={1}>
-                          {conversation.title}
-                        </Text>
-                        <Text style={styles.drawerSessionSubtitle} numberOfLines={1}>
-                          {copy.sessionMeta(conversation.model, conversation.messages.length)}
-                        </Text>
-                      </Pressable>
-                      <View style={styles.drawerSessionActions}>
-                        <Pressable onPress={() => promptRenameConversation(conversation)}>
-                          <Text style={styles.sessionActionText}>{copy.renameSession}</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            void copyConversationExport(conversation);
-                          }}
-                        >
-                          <Text style={styles.sessionActionText}>{copy.exportSession}</Text>
-                        </Pressable>
-                        <Pressable onPress={() => confirmDeleteConversation(conversation.id)}>
-                          <Text style={styles.deleteText}>{copy.delete}</Text>
-                        </Pressable>
+                    <Pressable
+                      key={conversation.id}
+                      style={[
+                        styles.drawerSessionItem,
+                        active && styles.drawerSessionItemActive,
+                        selected && styles.drawerSessionItemSelected,
+                      ]}
+                      onPress={() => openConversation(conversation.id)}
+                      onLongPress={() => {
+                        if (!sessionSelectionMode) {
+                          setSessionContextMenuId(conversation.id);
+                        }
+                      }}
+                      delayLongPress={320}
+                    >
+                      <View style={styles.drawerSessionMain}>
+                        {sessionSelectionMode && (
+                          <View style={[styles.sessionSelectMark, selected && styles.sessionSelectMarkActive]}>
+                            {selected && <Text style={styles.sessionSelectMarkText}>✓</Text>}
+                          </View>
+                        )}
+                        <View style={styles.sessionMeta}>
+                          <View style={styles.drawerSessionTitleRow}>
+                            {conversation.pinned && <Text style={styles.drawerSessionPin}>📌</Text>}
+                            <Text style={styles.drawerSessionTitle} numberOfLines={1}>
+                              {conversation.title}
+                            </Text>
+                          </View>
+                          <Text style={styles.drawerSessionSubtitle} numberOfLines={1}>
+                            {formatConversationListMeta(conversation, uiLanguage)}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })
               )}
@@ -2371,6 +2900,50 @@ export default function App() {
             </Pressable>
           </SafeAreaView>
         </Animated.View>
+      </Modal>
+
+      <Modal visible={!!sessionContextConversation} animationType="fade" transparent onRequestClose={() => setSessionContextMenuId(null)}>
+        <Pressable style={styles.contextMenuBackdrop} onPress={() => setSessionContextMenuId(null)}>
+          <View style={styles.sessionContextMenu}>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                if (sessionContextConversation) {
+                  togglePinConversation(sessionContextConversation.id);
+                }
+              }}
+            >
+              <Text style={styles.contextMenuIcon}>📌</Text>
+              <Text style={styles.contextMenuText}>
+                {sessionContextConversation?.pinned
+                  ? uiLanguage === 'zh' ? '取消置顶' : 'Unpin'
+                  : uiLanguage === 'zh' ? '置顶' : 'Pin'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                if (sessionContextConversation) {
+                  promptRenameConversation(sessionContextConversation);
+                }
+              }}
+            >
+              <Text style={styles.contextMenuIcon}>✏️</Text>
+              <Text style={styles.contextMenuText}>{copy.renameSession}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                if (sessionContextConversation) {
+                  confirmDeleteConversation(sessionContextConversation.id);
+                }
+              }}
+            >
+              <Text style={styles.contextMenuIcon}>🗑</Text>
+              <Text style={[styles.contextMenuText, styles.contextMenuDangerText]}>{copy.delete}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
       </Modal>
 
       <Modal visible={!!renamingConversation} animationType="fade" transparent>
@@ -2431,23 +3004,46 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 6,
+    paddingTop: Platform.OS === 'android' ? 12 : 14,
+    paddingBottom: 4,
     gap: 8,
   },
   sessionSwitcher: {
     flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-start',
+  },
+  modelPill: {
+    maxWidth: '100%',
+    minHeight: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#FFFFFF',
+    paddingLeft: 12,
+    paddingRight: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
     color: '#111827',
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: '800',
+    flexShrink: 1,
+  },
+  modelPillChevron: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 15,
   },
   sessionLine: {
     color: '#64748B',
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: 4,
+    paddingLeft: 2,
   },
   topActions: {
     flexDirection: 'row',
@@ -2463,11 +3059,11 @@ const styles = StyleSheet.create({
   },
   chatMenu: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 72 : 82,
+    top: Platform.OS === 'android' ? 66 : 74,
     right: 14,
     zIndex: 10,
-    minWidth: 172,
-    borderRadius: 22,
+    minWidth: 150,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     paddingVertical: 10,
     borderWidth: 1,
@@ -2479,22 +3075,14 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   chatMenuItem: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
     paddingHorizontal: 18,
-  },
-  chatMenuIcon: {
-    width: 24,
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
-    textAlign: 'center',
   },
   chatMenuText: {
     color: '#111827',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   chatMenuDangerText: {
@@ -2531,7 +3119,7 @@ const styles = StyleSheet.create({
   chatContent: {
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 28,
+    paddingBottom: 14,
   },
   emptyStateCard: {
     marginTop: 36,
@@ -2575,30 +3163,30 @@ const styles = StyleSheet.create({
   },
   composerCard: {
     marginHorizontal: 12,
-    marginTop: 2,
-    marginBottom: Platform.OS === 'android' ? 8 : 10,
-    padding: 5,
-    borderRadius: 22,
+    marginTop: 0,
+    marginBottom: Platform.OS === 'android' ? 2 : 8,
+    padding: 4,
+    borderRadius: 24,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D8E0EA',
   },
   composerRow: {
-    minHeight: 44,
+    minHeight: 46,
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 5,
+    alignItems: 'center',
+    gap: 6,
   },
   composerInput: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 40,
     maxHeight: 96,
     color: '#111827',
     fontSize: 15,
     lineHeight: 20,
     paddingHorizontal: 8,
-    paddingTop: 9,
-    paddingBottom: 7,
+    paddingTop: Platform.OS === 'android' ? 7 : 9,
+    paddingBottom: Platform.OS === 'android' ? 7 : 8,
     textAlignVertical: 'top',
   },
   smallAction: {
@@ -2627,27 +3215,29 @@ const styles = StyleSheet.create({
   attachOptionRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: 2,
-    paddingBottom: 6,
+    paddingHorizontal: 3,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   attachOption: {
     flex: 1,
-    minHeight: 38,
-    borderRadius: 15,
+    minHeight: 48,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#D8E0EA',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
+    gap: 6,
   },
   attachOptionIcon: {
     color: '#2563EB',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
   },
   attachOptionText: {
-    marginTop: 2,
     color: '#111827',
     fontSize: 12,
     fontWeight: '800',
@@ -2695,6 +3285,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'center',
     paddingHorizontal: 18,
+  },
+  contextMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
+    justifyContent: 'center',
+    paddingHorizontal: 42,
+  },
+  sessionContextMenu: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 300,
+    borderRadius: 20,
+    backgroundColor: '#111827',
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#273449',
+    shadowColor: '#000000',
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
+  },
+  contextMenuItem: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  contextMenuIcon: {
+    width: 28,
+    color: '#E5E7EB',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  contextMenuText: {
+    flex: 1,
+    color: '#F9FAFB',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  contextMenuDangerText: {
+    color: '#FCA5A5',
   },
   modalCard: {
     maxHeight: '92%',
@@ -2846,37 +3479,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   drawerHeader: {
-    minHeight: 62,
+    minHeight: 64,
     paddingHorizontal: 22,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
   },
-  drawerTitle: {
+  drawerHeaderTitleBlock: {
     flex: 1,
+    minWidth: 0,
+  },
+  drawerTitle: {
     color: '#0F172A',
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
   },
-  drawerHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  drawerHeaderHint: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
   },
-  drawerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#22C55E',
+  drawerHeaderButton: {
+    minHeight: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  drawerAvatarText: {
-    color: '#FFFFFF',
+  drawerHeaderButtonActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  drawerHeaderButtonText: {
+    color: '#334155',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
+  },
+  drawerHeaderButtonTextActive: {
+    color: '#2563EB',
   },
   drawerSearchInput: {
     minHeight: 48,
@@ -2916,43 +3564,126 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
+  drawerSectionHeader: {
+    marginTop: 22,
+    marginBottom: 8,
+    paddingHorizontal: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   drawerSectionLabel: {
+    flex: 1,
     color: '#111827',
     fontSize: 17,
     fontWeight: '800',
-    marginTop: 26,
-    marginBottom: 8,
+  },
+  drawerCopyButton: {
+    minHeight: 34,
+    borderRadius: 17,
+    backgroundColor: '#111827',
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerCopyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  drawerSelectionText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
     paddingHorizontal: 22,
+    marginBottom: 6,
   },
   drawerHistoryScroll: {
     flex: 1,
   },
   drawerHistoryContent: {
+    paddingHorizontal: 14,
+    paddingTop: 2,
     paddingBottom: 108,
   },
   drawerSessionItem: {
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    minHeight: 76,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   drawerSessionItemActive: {
-    backgroundColor: '#F1F5F9',
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+  },
+  drawerSessionItemSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  drawerSessionMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+  },
+  drawerSessionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    gap: 6,
+  },
+  drawerSessionPin: {
+    color: '#2563EB',
+    fontSize: 13,
+    lineHeight: 16,
   },
   drawerSessionTitle: {
+    flex: 1,
     color: '#111827',
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
   },
   drawerSessionSubtitle: {
-    color: '#64748B',
+    color: '#6B7280',
     fontSize: 12,
-    marginTop: 5,
+    fontWeight: '600',
+    marginTop: 7,
   },
   drawerSessionActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     marginTop: 9,
+    marginLeft: 4,
+  },
+  sessionSelectMark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sessionSelectMarkActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#2563EB',
+  },
+  sessionSelectMarkText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 16,
   },
   drawerNewChatButton: {
     position: 'absolute',
@@ -3188,6 +3919,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  profileChipRow: {
+    gap: 8,
+    paddingBottom: 12,
+  },
+  profileChip: {
+    width: 138,
+    minHeight: 58,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  profileChipSelected: {
+    borderColor: '#60A5FA',
+    backgroundColor: '#EFF6FF',
+  },
+  profileChipTitle: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  profileChipTitleSelected: {
+    color: '#1D4ED8',
+  },
+  profileChipMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+  profileChipMetaSelected: {
+    color: '#2563EB',
+  },
+  formSectionHeader: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 2,
+  },
+  sectionValue: {
+    flex: 1,
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
   profileList: {
     gap: 10,
     marginBottom: 12,
@@ -3274,6 +4055,117 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 12,
     fontWeight: '700',
+  },
+  compactSettingCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  compactSettingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  compactSettingTitleWrap: {
+    flex: 1,
+  },
+  compactSettingTitle: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  compactSettingSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+  advancedToggle: {
+    minHeight: 64,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  advancedToggleTextWrap: {
+    flex: 1,
+  },
+  advancedToggleTitle: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  advancedToggleSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+  advancedToggleAction: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  advancedPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  switchRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  switchTextWrap: {
+    flex: 1,
+  },
+  switchTitle: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  switchSubtitle: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  compactSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#CBD5E1',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  compactSwitchOn: {
+    backgroundColor: '#2563EB',
+  },
+  compactSwitchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+  },
+  compactSwitchThumbOn: {
+    alignSelf: 'flex-end',
   },
   inlineHint: {
     color: '#64748B',

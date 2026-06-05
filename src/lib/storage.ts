@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import nacl from 'tweetnacl';
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
 
-import type { ApiProfile, PersistedState } from '../types';
+import type { ApiProfile, ConversationRecord, PersistedState } from '../types';
 import { DEFAULT_LANGUAGE, DEFAULT_PROFILE } from './models';
 
 const STATE_KEY = 'ai-chat-pocket.state.v1';
@@ -36,6 +36,24 @@ function normalizeProfile(profile: Partial<ApiProfile> | undefined, fallbackId =
   };
 }
 
+function normalizeConversation(conversation: Partial<ConversationRecord>): ConversationRecord | null {
+  if (!conversation.id || !conversation.createdAt || !conversation.updatedAt || !Array.isArray(conversation.messages)) {
+    return null;
+  }
+
+  return {
+    id: conversation.id,
+    title: conversation.title?.trim() || 'New session',
+    model: conversation.model?.trim() || DEFAULT_PROFILE.model,
+    assistantKind: conversation.assistantKind ?? 'cli',
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    pinned: conversation.pinned ?? false,
+    previousResponseId: conversation.previousResponseId ?? null,
+    messages: conversation.messages,
+  };
+}
+
 function normalizePersistedState(parsed: Partial<PersistedState>): PersistedState {
   const legacyProfile = normalizeProfile(parsed.profile, DEFAULT_PROFILE.id);
   const profiles =
@@ -50,7 +68,9 @@ function normalizePersistedState(parsed: Partial<PersistedState>): PersistedStat
 
   return {
     activeConversationId: parsed.activeConversationId ?? null,
-    conversations: parsed.conversations ?? [],
+    conversations: (parsed.conversations ?? [])
+      .map((conversation) => normalizeConversation(conversation))
+      .filter((conversation): conversation is ConversationRecord => conversation !== null),
     activeProfileId,
     profiles,
     profile: activeProfile,

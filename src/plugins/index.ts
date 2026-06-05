@@ -13,17 +13,22 @@ export function applyContentPlugins(
   text: string,
   context: { message: ChatMessage; language: UiLanguage; isUser: boolean }
 ): string {
-  const blocks: string[] = [];
-  const protectedText = text.replace(codeFencePattern, (block) => {
-    const token = `\uE000CODE_BLOCK_${blocks.length}\uE000`;
-    blocks.push(block);
-    return token;
-  });
+  function transformChunk(chunk: string) {
+    return contentPlugins.reduce(
+      (current, plugin) => plugin.transformText?.(current, context) ?? current,
+      chunk
+    );
+  }
 
-  const transformed = contentPlugins.reduce(
-    (current, plugin) => plugin.transformText?.(current, context) ?? current,
-    protectedText
-  );
+  let transformed = '';
+  let cursor = 0;
+  let match: RegExpExecArray | null;
 
-  return transformed.replace(/\uE000CODE_BLOCK_(\d+)\uE000/g, (_, index: string) => blocks[Number(index)] ?? '');
+  while ((match = codeFencePattern.exec(text))) {
+    transformed += transformChunk(text.slice(cursor, match.index));
+    transformed += match[0];
+    cursor = match.index + match[0].length;
+  }
+
+  return transformed + transformChunk(text.slice(cursor));
 }

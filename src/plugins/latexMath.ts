@@ -168,6 +168,103 @@ function normalizeLatexEnvironmentMarkers(text: string): string {
   return text.replace(envPattern, '').replace(compactEnvPattern, '').replace(slashEnvPattern, '');
 }
 
+function skipSpaces(text: string, index: number): number {
+  let cursor = index;
+  while (cursor < text.length && /\s/.test(text[cursor])) {
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function readLatexGroup(text: string, openIndex: number): { body: string; endIndex: number } | null {
+  if (text[openIndex] !== '{') {
+    return null;
+  }
+
+  let depth = 0;
+  for (let cursor = openIndex; cursor < text.length; cursor += 1) {
+    if (text[cursor] === '{') {
+      depth += 1;
+    } else if (text[cursor] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          body: text.slice(openIndex + 1, cursor),
+          endIndex: cursor + 1,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function commandEndIndex(text: string, index: number, command: string): number | null {
+  if (text.startsWith(`\\${command}`, index)) {
+    return index + command.length + 1;
+  }
+
+  const previous = index > 0 ? text[index - 1] : '';
+  const next = text[index + command.length] ?? '';
+  if (
+    text.startsWith(command, index) &&
+    !/[A-Za-z\\]/.test(previous) &&
+    !/[A-Za-z]/.test(next)
+  ) {
+    return index + command.length;
+  }
+
+  return null;
+}
+
+function normalizeNestedLatexCommands(text: string): string {
+  let normalized = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const fracEnd = commandEndIndex(text, cursor, 'frac');
+    if (fracEnd !== null) {
+      const numeratorStart = skipSpaces(text, fracEnd);
+      const numerator = readLatexGroup(text, numeratorStart);
+      const denominatorStart = numerator ? skipSpaces(text, numerator.endIndex) : -1;
+      const denominator = numerator ? readLatexGroup(text, denominatorStart) : null;
+
+      if (numerator && denominator) {
+        normalized += `(${normalizeNestedLatexCommands(numerator.body)})/(${normalizeNestedLatexCommands(denominator.body)})`;
+        cursor = denominator.endIndex;
+        continue;
+      }
+    }
+
+    const sqrtEnd = commandEndIndex(text, cursor, 'sqrt');
+    if (sqrtEnd !== null) {
+      const bodyStart = skipSpaces(text, sqrtEnd);
+      const body = readLatexGroup(text, bodyStart);
+      if (body) {
+        normalized += `√(${normalizeNestedLatexCommands(body.body)})`;
+        cursor = body.endIndex;
+        continue;
+      }
+    }
+
+    const expEnd = commandEndIndex(text, cursor, 'exp');
+    if (expEnd !== null) {
+      const bodyStart = skipSpaces(text, expEnd);
+      const body = readLatexGroup(text, bodyStart);
+      if (body) {
+        normalized += `exp(${normalizeNestedLatexCommands(body.body)})`;
+        cursor = body.endIndex;
+        continue;
+      }
+    }
+
+    normalized += text[cursor];
+    cursor += 1;
+  }
+
+  return normalized;
+}
+
 function normalizeLatexMathText(text: string): string {
   let normalized = text
     .replace(/\$\$([\s\S]*?)\$\$/g, '$1')
@@ -178,6 +275,7 @@ function normalizeLatexMathText(text: string): string {
     .replace(/\\\\[ \t]*/g, '\n');
 
   normalized = normalizeLatexEnvironmentMarkers(normalized);
+  normalized = normalizeNestedLatexCommands(normalized);
 
   for (const [pattern, value] of replacements) {
     normalized = normalized.replace(pattern, value);

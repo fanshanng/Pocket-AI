@@ -47,6 +47,7 @@ export type ConversationRecord = {
   assistantKind: AssistantKind;
   createdAt: string;
   updatedAt: string;
+  pinned: boolean;
   previousResponseId: string | null;
   messages: ChatMessage[];
 };

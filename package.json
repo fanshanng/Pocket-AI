@@ -17,6 +17,7 @@
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-markdown-display": "^7.0.2",
+    "react-native-syntax-highlighter": "^2.1.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
   },
