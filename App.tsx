@@ -1597,22 +1597,6 @@ export default function App() {
                   ))}
                 </ScrollView>
               )}
-              {attachmentMenuVisible && !composerDisabled && (
-                <View style={styles.attachOptionRow}>
-                  <Pressable style={styles.attachOption} onPress={attachFromCamera}>
-                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '拍' : 'Cam'}</Text>
-                    <Text style={styles.attachOptionText}>{copy.camera}</Text>
-                  </Pressable>
-                  <Pressable style={styles.attachOption} onPress={attachImages}>
-                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '图' : 'Img'}</Text>
-                    <Text style={styles.attachOptionText}>{copy.image}</Text>
-                  </Pressable>
-                  <Pressable style={styles.attachOption} onPress={attachFiles}>
-                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '文' : 'Doc'}</Text>
-                    <Text style={styles.attachOptionText}>{copy.file}</Text>
-                  </Pressable>
-                </View>
-              )}
               <View style={styles.composerRow}>
                 <View style={styles.attachMenuWrap}>
                   <Pressable
@@ -1648,6 +1632,22 @@ export default function App() {
                   <Text style={styles.sendActionText}>{sending ? '■' : '↑'}</Text>
                 </Pressable>
               </View>
+              {attachmentMenuVisible && !composerDisabled && (
+                <View style={styles.attachOptionRow}>
+                  <Pressable style={styles.attachOption} onPress={attachFromCamera}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '拍' : 'Cam'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.camera}</Text>
+                  </Pressable>
+                  <Pressable style={styles.attachOption} onPress={attachImages}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '图' : 'Img'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.image}</Text>
+                  </Pressable>
+                  <Pressable style={styles.attachOption} onPress={attachFiles}>
+                    <Text style={styles.attachOptionIcon}>{uiLanguage === 'zh' ? '文' : 'Doc'}</Text>
+                    <Text style={styles.attachOptionText}>{copy.file}</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
