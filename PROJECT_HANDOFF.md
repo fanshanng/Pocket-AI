@@ -12,6 +12,9 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Native Android project exists in `android/`
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
+- Current public release target: GitHub Release APK, not Google Play.
+- Current version: `1.0.0` / Android `versionCode 1`.
+- Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
 
@@ -45,6 +48,9 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Settings/API/session modals use a separate dimmed dismiss area above the card so Android vertical scrolling inside the card is less likely to be stolen by the backdrop.
 - API profile reasoning effort chips only show common choices (`high`, `xhigh`); other valid values can be typed and are applied when recognized. Invalid typed values show a short inline warning.
 - Common API errors are mapped into clearer user-facing tips for auth, model/endpoint mismatch, rate limits, timeout, network failure, and provider 5xx errors.
+- Formal local release signing is configured. Release builds read `android/keystore.properties` and use `android/keystore/pocket-ai-release.keystore`; release no longer uses `debug.keystore`.
+- First app icon set has been generated from `assets/icon-source.png.jpg`. Both Expo `assets/` and native Android `android/app/src/main/res/` launcher/splash resources were updated.
+- `RELEASE_CHECKLIST.md` documents the GitHub Release flow, APK hash/signature checks, smoke tests, and files that must never be uploaded.
 
 ## Key Files
 
@@ -75,6 +81,11 @@ This file is for starting a fresh Codex conversation without losing project cont
 - `src/plugins/`
   - Internal content plugin registry.
   - `latexMath.ts` transforms common LaTeX/math/cryptography tokens into readable symbols.
+- `assets/`
+  - App icon source and generated Expo icon/splash/favicon/adaptive icon assets.
+  - `icon-source.png.jpg` is the current source image for regenerated icon assets.
+- `RELEASE_CHECKLIST.md`
+  - Per-release checklist for GitHub APK publishing.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt`
   - Native bridge for pending shared/dragged image URI events.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/MainActivity.kt`
@@ -130,7 +141,7 @@ Recommended next tasks:
 5. Provider capability flags.
    Track whether a profile supports Responses chaining, images, files, system prompts, and thinking/reasoning parameters.
 6. Security polish.
-   Add app lock / biometric unlock, encrypted backup/restore, and real release signing before final distribution.
+   Add app lock / biometric unlock and encrypted backup/restore.
 
 ## Validation Commands
 
@@ -147,6 +158,32 @@ Build standalone release APK:
 cd E:\android\projects\ai-chat-pocket\android
 $env:JAVA_HOME='D:\JAVA\jdk-21.0.2.13-hotspot'
 cmd /c gradlew.bat assembleRelease
+```
+
+Force rebuild native resources when icon/splash resources changed:
+
+```powershell
+cd E:\android\projects\ai-chat-pocket\android
+$env:JAVA_HOME='D:\JAVA\jdk-21.0.2.13-hotspot'
+cmd /c gradlew.bat assembleRelease --rerun-tasks
+```
+
+Verify release APK signature:
+
+```powershell
+E:\android\.devtools\android-sdk\build-tools\36.1.0\apksigner.bat verify --print-certs E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk
+```
+
+Expected signing certificate SHA-256:
+
+```text
+83e92deba5be48ebe1276107117ee9dee551b68971e75f5d3bee3404aa1e88b0
+```
+
+Current verified APK SHA-256 after icon update:
+
+```text
+1D4465CB7A7CA7E6F5A8F56F0117376E5857EEAE8A6FF3F20AD944B9B0A5B507
 ```
 
 Install on connected Android device:
@@ -179,6 +216,8 @@ Keep development in `E:\android\projects\ai-chat-pocket`. Use the sibling folder
 - `android/app/build/`
 - local logs/screenshots
 - any `.env*` or real secrets
+- `android/keystore.properties`
+- `android/keystore/`
 
 When code changes are ready to publish privately, sync only the selected files from the development folder into the Git folder, then commit/push from `ai-chat-pocket-git`.
 
@@ -187,3 +226,4 @@ When code changes are ready to publish privately, sync only the selected files f
 - React Native warns that `SafeAreaView` is deprecated and recommends `react-native-safe-area-context`. This is not currently breaking.
 - Android Gradle build requires Java 17+. This machine has used `D:\JAVA\jdk-21.0.2.13-hotspot`.
 - Release APK signing uses local-only `android/keystore.properties` pointing at `android/keystore/pocket-ai-release.keystore`. These files are intentionally ignored by Git and must be backed up offline before public release.
+- The Gradle wrapper may try to download Gradle when using `--rerun-tasks`; if the sandbox blocks network, rerun with approved escalation.
