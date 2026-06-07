@@ -66,6 +66,9 @@
 - `cmd /c node_modules\.bin\tsc.cmd --noEmit`
 - `npm run smoke`
 - `git diff --check`
+- `cmd /c gradlew.bat assembleRelease`（`NODE_ENV=production`）
+- Release APK SHA256: `E1C9026B1EC18FB60A7326037D6689C50B663662CF1FC95BEE2AC6319546813F`
+- Release signing certificate SHA256: `9818729430986A531F0AC5E68B526DC019BC68A8320273306B6635436E939DB1`
 
 ## 提交说明
 
