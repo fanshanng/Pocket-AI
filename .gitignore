@@ -21,6 +21,8 @@ ios/
 releases/
 
 # Local secrets
+LOCAL_PRIVATE/
+local-private/
 .env
 .env.*
 *.jks
