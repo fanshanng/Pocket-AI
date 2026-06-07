@@ -8,6 +8,23 @@ def releaseKeystoreProperties = new Properties()
 if (releaseKeystorePropertiesFile.exists()) {
     releaseKeystoreProperties.load(new FileInputStream(releaseKeystorePropertiesFile))
 }
+def requiredReleaseSigningKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def hasReleaseSigningConfig =
+    releaseKeystorePropertiesFile.exists() &&
+    requiredReleaseSigningKeys.every { key -> releaseKeystoreProperties[key] }
+def requestedReleaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
+if (requestedReleaseBuild && !hasReleaseSigningConfig) {
+    if (!releaseKeystorePropertiesFile.exists()) {
+        throw new GradleException("Missing android/keystore.properties. Create it before building a release APK.")
+    }
+    requiredReleaseSigningKeys.each { key ->
+        if (!releaseKeystoreProperties[key]) {
+            throw new GradleException("Missing '${key}' in android/keystore.properties.")
+        }
+    }
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -104,25 +121,15 @@ android {
     }
     signingConfigs {
         debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+            // Use the Android Gradle Plugin default debug keystore.
         }
         release {
-            if (!releaseKeystorePropertiesFile.exists()) {
-                throw new GradleException("Missing android/keystore.properties. Create it before building a release APK.")
+            if (hasReleaseSigningConfig) {
+                storeFile rootProject.file(releaseKeystoreProperties['storeFile'])
+                storePassword releaseKeystoreProperties['storePassword']
+                keyAlias releaseKeystoreProperties['keyAlias']
+                keyPassword releaseKeystoreProperties['keyPassword']
             }
-            def requiredSigningKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
-            requiredSigningKeys.each { key ->
-                if (!releaseKeystoreProperties[key]) {
-                    throw new GradleException("Missing '${key}' in android/keystore.properties.")
-                }
-            }
-            storeFile rootProject.file(releaseKeystoreProperties['storeFile'])
-            storePassword releaseKeystoreProperties['storePassword']
-            keyAlias releaseKeystoreProperties['keyAlias']
-            keyPassword releaseKeystoreProperties['keyPassword']
         }
     }
     buildTypes {

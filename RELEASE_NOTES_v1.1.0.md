@@ -13,7 +13,7 @@
 - API 配置更清晰：支持多个 OpenAI 兼容配置，按配置缓存模型列表和推理强度候选，提供显式刷新，避免跨配置数据混淆。
 - Android 适配更稳：修复输入框在键盘关闭、窗口尺寸变化、小窗和浮动键盘场景下停留在错误位置的问题，并接入原生 IME inset 桥接。
 - 项目结构更轻：拆分 copy、theme、conversation、profile、release、native helper、icon 和 presence 相关逻辑，清理无用依赖和不可达 UI，减少入口文件体积。
-- 版本元数据完成更新：应用版本为 `1.1.0`，Android `versionCode` 为 `34`，最新版本检查指向 `HDdssX/Pocket-AI`。
+- 版本元数据完成更新：应用版本为 `1.1.0`，Android `versionCode` 为 `34`，最新版本检查指向 `fanshanng/Pocket-AI`。
 
 ## 主要变化
 

@@ -2,7 +2,7 @@ import { compareVersions } from './version';
 
 export const APP_VERSION = '1.1.0';
 
-const LATEST_RELEASE_URL = 'https://api.github.com/repos/HDdssX/Pocket-AI/releases/latest';
+const LATEST_RELEASE_URL = 'https://api.github.com/repos/fanshanng/Pocket-AI/releases/latest';
 
 type GitHubReleasePayload = {
   tag_name?: string;
