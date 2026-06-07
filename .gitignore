@@ -18,6 +18,7 @@ android/keystore.properties
 android/keystore/
 android/**/.cxx/
 ios/
+releases/
 
 # Local secrets
 .env

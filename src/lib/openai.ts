@@ -439,7 +439,7 @@ function sanitizeGeneratedTitle(text: string, language: UiLanguage): string {
     .replace(/^(标题|会话标题|title)\s*[:：-]\s*/i, '')
     .replace(/[。.!！?？,，;；]+$/g, '')
     .trim();
-  const limit = language === 'zh' ? 10 : 24;
+  const limit = 15;
   return Array.from(cleaned).slice(0, limit).join('');
 }
 
@@ -701,8 +701,8 @@ export async function createConversationTitle(options: {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const prompt =
     language === 'zh'
-      ? `请根据下面这轮对话生成一个中文标题，只输出标题，10个汉字以内，不要标点。\n\n用户：${userText || '(附件)'}\n\n助手：${assistantText}`
-      : `Generate a short chat title. Output only the title, within 24 characters, no punctuation.\n\nUser: ${userText || '(attachment)'}\n\nAssistant: ${assistantText}`;
+      ? `请根据下面这轮对话生成一个中文标题，只输出标题，15个字以内，不要标点。\n\n用户：${userText || '(附件)'}\n\n助手：${assistantText}`
+      : `Generate a short chat title. Output only the title, within 15 characters, no punctuation.\n\nUser: ${userText || '(attachment)'}\n\nAssistant: ${assistantText}`;
 
   try {
     if (profile.apiProtocol === 'chatCompletions') {

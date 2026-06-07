@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class SharedImagePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): MutableList<NativeModule> =
-    mutableListOf(SharedImageModule(reactContext))
+    mutableListOf(SharedImageModule(reactContext), KeyboardInsetsModule(reactContext))
 
   override fun createViewManagers(reactContext: ReactApplicationContext): MutableList<ViewManager<*, *>> =
     mutableListOf()

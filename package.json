@@ -1,6 +1,6 @@
 {
   "name": "ai-chat-pocket",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.ts",
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",
@@ -12,21 +12,26 @@
     "expo-image-picker": "^56.0.15",
     "expo-linear-gradient": "^56.0.4",
     "expo-secure-store": "^56.0.4",
-    "expo-status-bar": "~56.0.4",
-    "punycode": "^2.3.1",
+    "katex": "^0.17.0",
+    "lucide-react-native": "^1.17.0",
+    "markdown-it": "^10.0.0",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-markdown-display": "^7.0.2",
-    "react-native-syntax-highlighter": "^2.1.0",
+    "react-native-svg": "15.15.4",
+    "react-native-webview": "13.16.1",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"

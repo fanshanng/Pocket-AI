@@ -6,6 +6,8 @@ export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | '
 
 export type UiLanguage = 'zh' | 'en';
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export type ApiProtocol = 'responses' | 'chatCompletions';
 
 export type ApiProfile = {
@@ -18,6 +20,8 @@ export type ApiProfile = {
   organization: string;
   systemPrompt: string;
   reasoningEffort: ReasoningEffort;
+  cachedModels: string[];
+  cachedReasoningEfforts: ReasoningEffort[];
   storeResponses: boolean;
 };
 
@@ -30,6 +34,17 @@ export type AttachmentRecord = {
   size: number;
 };
 
+export type ChatMessageVariant = {
+  id: string;
+  text: string;
+  createdAt: string;
+  attachments: AttachmentRecord[];
+  assistantMessageId?: string;
+  assistantText?: string;
+  assistantResponseId?: string;
+  assistantError?: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -38,6 +53,8 @@ export type ChatMessage = {
   attachments: AttachmentRecord[];
   error?: string;
   responseId?: string;
+  variants?: ChatMessageVariant[];
+  activeVariantIndex?: number;
 };
 
 export type ConversationRecord = {
@@ -59,6 +76,7 @@ export type PersistedState = {
   profiles: ApiProfile[];
   profile: ApiProfile;
   uiLanguage: UiLanguage;
+  themeMode: ThemeMode;
 };
 
 export type PendingAttachment = AttachmentRecord;

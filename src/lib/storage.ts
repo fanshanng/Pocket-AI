@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import nacl from 'tweetnacl';
 import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from 'tweetnacl-util';
 
-import type { ApiProfile, ConversationRecord, PersistedState } from '../types';
+import type { ApiProfile, ConversationRecord, PersistedState, ThemeMode } from '../types';
 import { DEFAULT_LANGUAGE, DEFAULT_PROFILE } from './models';
 
 const STATE_KEY = 'ai-chat-pocket.state.v1';
@@ -25,14 +25,30 @@ export const EMPTY_STATE: PersistedState = {
   profiles: [DEFAULT_PROFILE],
   profile: DEFAULT_PROFILE,
   uiLanguage: DEFAULT_LANGUAGE,
+  themeMode: 'system',
 };
+
+function normalizeThemeMode(value: unknown): ThemeMode {
+  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
+}
 
 function normalizeProfile(profile: Partial<ApiProfile> | undefined, fallbackId = DEFAULT_PROFILE.id): ApiProfile {
   const id = profile?.id?.trim() || fallbackId;
+  const model = profile?.model?.trim() || DEFAULT_PROFILE.model;
+  const reasoningEffort = profile?.reasoningEffort ?? DEFAULT_PROFILE.reasoningEffort;
   return {
     ...DEFAULT_PROFILE,
     ...(profile ?? {}),
     id,
+    model,
+    reasoningEffort,
+    cachedModels: Array.isArray(profile?.cachedModels) && profile.cachedModels.length > 0
+      ? profile.cachedModels.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : [model],
+    cachedReasoningEfforts:
+      Array.isArray(profile?.cachedReasoningEfforts) && profile.cachedReasoningEfforts.length > 0
+        ? profile.cachedReasoningEfforts
+        : [reasoningEffort],
   };
 }
 
@@ -75,6 +91,7 @@ function normalizePersistedState(parsed: Partial<PersistedState>): PersistedStat
     profiles,
     profile: activeProfile,
     uiLanguage: parsed.uiLanguage ?? DEFAULT_LANGUAGE,
+    themeMode: normalizeThemeMode(parsed.themeMode),
   };
 }
 
