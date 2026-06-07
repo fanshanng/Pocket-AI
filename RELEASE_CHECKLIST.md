@@ -19,6 +19,7 @@ cmd /c node_modules\.bin\tsc.cmd --noEmit
 ```powershell
 cd E:\android\projects\ai-chat-pocket\android
 $env:JAVA_HOME='D:\JAVA\jdk-21.0.2.13-hotspot'
+$env:NODE_ENV='production'
 cmd /c gradlew.bat assembleRelease
 ```
 
@@ -37,7 +38,7 @@ E:\android\.devtools\android-sdk\build-tools\36.1.0\apksigner.bat verify --print
 期望签名证书 SHA-256：
 
 ```text
-83e92deba5be48ebe1276107117ee9dee551b68971e75f5d3bee3404aa1e88b0
+9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
 ## APK 哈希
@@ -71,7 +72,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath E:\android\projects\ai-chat-pocket\a
 建议标题：
 
 ```text
-Pocket AI v1.0.0
+Pocket AI v1.1.0
 ```
 
 建议附件：
@@ -99,6 +100,7 @@ android/app/build/outputs/apk/release/app-release.apk
 - `android/local.properties`
 - `android/keystore.properties`
 - `android/keystore/`
+- `LOCAL_PRIVATE/`
 - `.env*`
 - 调试日志、截图、本地用户数据
 
@@ -108,7 +110,7 @@ android/app/build/outputs/apk/release/app-release.apk
 
 ```text
 E:\android\projects\ai-chat-pocket\android\keystore.properties
-E:\android\projects\ai-chat-pocket\android\keystore\pocket-ai-release.keystore
+E:\android\projects\ai-chat-pocket\LOCAL_PRIVATE\signing\
 ```
 
 丢失后无法给同包名 APK 做覆盖升级。
