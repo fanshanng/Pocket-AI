@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.0.0` / Android `versionCode 1`.
+- Current version: `1.1.0` / Android `versionCode 34`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -49,7 +49,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Settings includes a quiet About area with fanshanng GitHub/blog/email links.
 - API profile reasoning effort chips only show common choices (`high`, `xhigh`); other valid values can be typed and are applied when recognized. Invalid typed values show a short inline warning.
 - Common API errors are mapped into clearer user-facing tips for auth, model/endpoint mismatch, rate limits, timeout, network failure, and provider 5xx errors.
-- Formal local release signing is configured. Release builds read `android/keystore.properties` and use `android/keystore/pocket-ai-release.keystore`; release no longer uses `debug.keystore`.
+- Formal local release signing is configured. Release builds read local-only `android/keystore.properties`; current signing material is backed up in ignored `LOCAL_PRIVATE/signing/` and must never be uploaded.
 - First app icon set has been generated from `assets/icon-source.png.jpg`. Both Expo `assets/` and native Android `android/app/src/main/res/` launcher/splash resources were updated.
 - `RELEASE_CHECKLIST.md` documents the GitHub Release flow, APK hash/signature checks, smoke tests, and files that must never be uploaded.
 
@@ -178,13 +178,13 @@ E:\android\.devtools\android-sdk\build-tools\36.1.0\apksigner.bat verify --print
 Expected signing certificate SHA-256:
 
 ```text
-83e92deba5be48ebe1276107117ee9dee551b68971e75f5d3bee3404aa1e88b0
+9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current verified APK SHA-256 after icon update:
+Current verified APK SHA-256 for v1.1.0:
 
 ```text
-1D4465CB7A7CA7E6F5A8F56F0117376E5857EEAE8A6FF3F20AD944B9B0A5B507
+E1C9026B1EC18FB60A7326037D6689C50B663662CF1FC95BEE2AC6319546813F
 ```
 
 Install on connected Android device:
@@ -217,14 +217,17 @@ Keep development in `E:\android\projects\ai-chat-pocket`. Use the sibling folder
 - `android/app/build/`
 - local logs/screenshots
 - any `.env*` or real secrets
+- `LOCAL_PRIVATE/`
 - `android/keystore.properties`
 - `android/keystore/`
 
 When code changes are ready to publish privately, sync only the selected files from the development folder into the Git folder, then commit/push from `ai-chat-pocket-git`.
 
+When reviewing or merging PRs, do not mirror-sync a full repository into the development folder. Preserve local-only files such as `LOCAL_PRIVATE/`, `android/keystore.properties`, signing backups, build caches, logs, screenshots, and user data.
+
 ## Known Warnings
 
 - React Native warns that `SafeAreaView` is deprecated and recommends `react-native-safe-area-context`. This is not currently breaking.
 - Android Gradle build requires Java 17+. This machine has used `D:\JAVA\jdk-21.0.2.13-hotspot`.
-- Release APK signing uses local-only `android/keystore.properties` pointing at `android/keystore/pocket-ai-release.keystore`. These files are intentionally ignored by Git and must be backed up offline before public release.
+- Release APK signing uses local-only `android/keystore.properties` and ignored signing backups in `LOCAL_PRIVATE/signing/`. These files are intentionally ignored by Git and must be backed up offline.
 - The Gradle wrapper may try to download Gradle when using `--rerun-tasks`; if the sandbox blocks network, rerun with approved escalation.
