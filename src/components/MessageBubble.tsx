@@ -1,11 +1,26 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
-import { Animated, Easing, Image, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Copy, Edit3, RefreshCw, Send, Share2, TextSelect, X } from 'lucide-react-native';
+import { LongPressGestureHandler, State, type LongPressGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 
 import { applyContentPlugins } from '../plugins';
 import type { AttachmentRecord, ChatMessage, UiLanguage } from '../types';
+import { useDrawerGesture } from './DrawerGestureContext';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 type Props = {
@@ -17,6 +32,8 @@ type Props = {
   onEditUserMessage?: (messageId: string, nextText: string) => void;
   onSwitchVariant?: (messageId: string, direction: -1 | 1) => void;
 };
+
+const MESSAGE_LONG_PRESS_DELAY_MS = 320;
 
 function AttachmentPreview({ attachment, language }: { attachment: AttachmentRecord; language: UiLanguage }) {
   if (attachment.kind === 'image') {
@@ -179,6 +196,7 @@ function MessageBubbleComponent({
   const variantCount = isUser ? message.variants?.length ?? 0 : 0;
   const activeVariantIndex = Math.min(Math.max(message.activeVariantIndex ?? 0, 0), Math.max(0, variantCount - 1));
   const showThinking = !isUser && isStreaming && !message.error && displayText.trim().length === 0;
+  const { lockDrawerGesture, unlockDrawerGesture } = useDrawerGesture();
 
   useEffect(
     () => () => {
@@ -186,9 +204,19 @@ function MessageBubbleComponent({
       actionCardScale.stopAnimation();
       selectionBackdropOpacity.stopAnimation();
       selectionSheetTranslateY.stopAnimation();
+      unlockDrawerGesture();
     },
-    [actionBackdropOpacity, actionCardScale, selectionBackdropOpacity, selectionSheetTranslateY]
+    [actionBackdropOpacity, actionCardScale, selectionBackdropOpacity, selectionSheetTranslateY, unlockDrawerGesture]
   );
+
+  function handleBubbleLongPress(event: LongPressGestureHandlerStateChangeEvent) {
+    if (editing) {
+      return;
+    }
+    if (event.nativeEvent.state === State.ACTIVE) {
+      openActionMenu();
+    }
+  }
 
   async function copyMessage() {
     if (!hasCopyableText) return;
@@ -345,60 +373,65 @@ function MessageBubbleComponent({
 
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
-      <Pressable
-        style={[
-          styles.bubble,
-          isUser
-            ? [styles.userBubble, { backgroundColor: palette.userBubble, borderColor: palette.userBorder }]
-            : styles.assistantBubble,
-        ]}
-        onLongPress={() => {
-          if (!editing) openActionMenu();
-        }}
-        delayLongPress={320}
+      <LongPressGestureHandler
+        minDurationMs={MESSAGE_LONG_PRESS_DELAY_MS}
+        maxDist={10}
+        shouldCancelWhenOutside={false}
+        onHandlerStateChange={handleBubbleLongPress}
       >
-        {editing ? (
-          <View style={styles.editWrap}>
-            <TextInput
-              value={draftText}
-              onChangeText={setDraftText}
-              multiline
-              autoFocus
-              scrollEnabled
-              style={[styles.editInput, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }]}
-              textAlignVertical="top"
-            />
-            <View style={styles.editActions}>
-              <Pressable style={[styles.editGhostButton, { backgroundColor: palette.surfaceAlt, borderColor: palette.border }]} onPress={() => setEditing(false)}>
-                <X size={16} color={palette.muted} strokeWidth={2.4} />
-                <Text style={[styles.editGhostText, { color: palette.muted }]}>{actionCopy.cancel}</Text>
-              </Pressable>
-              <Pressable style={styles.editSendButton} onPress={submitEdit}>
-                <Send size={16} color="#FFFFFF" strokeWidth={2.4} />
-                <Text style={styles.editSendText}>{actionCopy.send}</Text>
-              </Pressable>
+        <View
+          style={[
+            styles.bubble,
+            isUser
+              ? [styles.userBubble, { backgroundColor: palette.userBubble, borderColor: palette.userBorder }]
+              : styles.assistantBubble,
+          ]}
+        >
+          {editing ? (
+            <View style={styles.editWrap}>
+              <TextInput
+                value={draftText}
+                onChangeText={setDraftText}
+                multiline
+                autoFocus
+                scrollEnabled
+                style={[styles.editInput, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }]}
+                textAlignVertical="top"
+              />
+              <View style={styles.editActions}>
+                <Pressable style={[styles.editGhostButton, { backgroundColor: palette.surfaceAlt, borderColor: palette.border }]} onPress={() => setEditing(false)}>
+                  <X size={16} color={palette.muted} strokeWidth={2.4} />
+                  <Text style={[styles.editGhostText, { color: palette.muted }]}>{actionCopy.cancel}</Text>
+                </Pressable>
+                <Pressable style={styles.editSendButton} onPress={submitEdit}>
+                  <Send size={16} color="#FFFFFF" strokeWidth={2.4} />
+                  <Text style={styles.editSendText}>{actionCopy.send}</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ) : isUser ? (
-          <Text style={[styles.bodyText, { color: palette.text }]}>{displayText}</Text>
-        ) : showThinking ? (
-          <ThinkingIndicator language={language} />
-        ) : (
-          <MarkdownRenderer
-            text={displayText}
-            deferCodeHighlight={isStreaming}
-            colorScheme={colorScheme}
-          />
-        )}
-        {message.attachments.length > 0 && (
-          <View style={styles.attachments}>
-            {message.attachments.map((attachment) => (
-              <AttachmentPreview key={attachment.id} attachment={attachment} language={language} />
-            ))}
-          </View>
-        )}
-        {!!message.error && <Text style={styles.errorText}>{message.error}</Text>}
-      </Pressable>
+          ) : isUser ? (
+            <Text style={[styles.bodyText, { color: palette.text }]}>{displayText}</Text>
+          ) : showThinking ? (
+            <ThinkingIndicator language={language} />
+          ) : (
+            <MarkdownRenderer
+              text={displayText}
+              deferCodeHighlight={isStreaming}
+              colorScheme={colorScheme}
+              onHorizontalGestureStart={lockDrawerGesture}
+              onHorizontalGestureEnd={unlockDrawerGesture}
+            />
+          )}
+          {message.attachments.length > 0 && (
+            <View style={styles.attachments}>
+              {message.attachments.map((attachment) => (
+                <AttachmentPreview key={attachment.id} attachment={attachment} language={language} />
+              ))}
+            </View>
+          )}
+          {!!message.error && <Text style={styles.errorText}>{message.error}</Text>}
+        </View>
+      </LongPressGestureHandler>
 
       {variantCount > 1 && !editing && (
         <View style={[styles.variantPager, { backgroundColor: palette.surface, borderColor: palette.border }]}>

@@ -49,6 +49,8 @@ export type LanguageCopy = {
   modelsEmpty: string;
   modelsFetchFailed: string;
   basicApiSettings: string;
+  connectionSettings: string;
+  modelAndReasoning: string;
   advancedApiSettings: string;
   showAdvancedSettings: string;
   hideAdvancedSettings: string;
@@ -69,6 +71,7 @@ export type LanguageCopy = {
   responseStorage: string;
   storageEnabled: string;
   storageDisabled: string;
+  advancedDefaultsSummary: string;
   projectId: string;
   organization: string;
   systemPrompt: string;
@@ -140,7 +143,7 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     recordsSection: '聊天记录',
     storageSection: '聊天记录存储',
     apiProfilesTitle: 'API 配置',
-    apiProfilesSubtitle: '可以保存多个 API 配置，点完成会自动保存并作为当前聊天使用。',
+    apiProfilesSubtitle: '可以保存多个 API 配置。编辑内容会自动保存，当前选中的配置会立即用于聊天。',
     newApiProfile: '新增配置',
     activeApiProfile: '当前使用',
     deleteApiProfile: '删除配置',
@@ -183,6 +186,8 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     modelsEmpty: '暂无可选模型，请先获取或手动输入。',
     modelsFetchFailed: '获取模型失败',
     basicApiSettings: '常用配置',
+    connectionSettings: '连接与鉴权',
+    modelAndReasoning: '模型与推理',
     advancedApiSettings: '高级配置',
     showAdvancedSettings: '展开高级配置',
     hideAdvancedSettings: '收起高级配置',
@@ -204,6 +209,7 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     responseStorage: '服务端响应存储',
     storageEnabled: '开启',
     storageDisabled: '关闭',
+    advancedDefaultsSummary: '默认关闭或留空',
     projectId: 'Project ID',
     organization: 'Organization',
     systemPrompt: '系统提示词',
@@ -273,7 +279,7 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     recordsSection: 'Chat History',
     storageSection: 'Chat Storage',
     apiProfilesTitle: 'API Profiles',
-    apiProfilesSubtitle: 'Save multiple API profiles. Done saves and applies the edited profile automatically.',
+    apiProfilesSubtitle: 'Save multiple API profiles. Edits are saved automatically, and the selected profile becomes active for chat right away.',
     newApiProfile: 'New profile',
     activeApiProfile: 'Current',
     deleteApiProfile: 'Delete profile',
@@ -316,6 +322,8 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     modelsEmpty: 'No models yet. Fetch models or type one manually.',
     modelsFetchFailed: 'Unable to fetch models',
     basicApiSettings: 'Basic settings',
+    connectionSettings: 'Connection and auth',
+    modelAndReasoning: 'Model and reasoning',
     advancedApiSettings: 'Advanced settings',
     showAdvancedSettings: 'Show advanced settings',
     hideAdvancedSettings: 'Hide advanced settings',
@@ -337,6 +345,7 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     responseStorage: 'Server response storage',
     storageEnabled: 'Enabled',
     storageDisabled: 'Disabled',
+    advancedDefaultsSummary: 'Default off or empty',
     projectId: 'Project ID',
     organization: 'Organization',
     systemPrompt: 'System prompt',

@@ -1,11 +1,19 @@
-import { Component, memo, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Component, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import MarkdownIt from 'markdown-it';
 import type MarkdownItToken from 'markdown-it/lib/token.mjs';
 import katex from 'katex';
-import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
-
+import { NativeViewGestureHandler } from 'react-native-gesture-handler';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { KATEX_CSS } from '../lib/katexAssets';
 import { CodeBlock } from './CodeBlock';
 
@@ -13,6 +21,8 @@ type Props = {
   text: string;
   deferCodeHighlight?: boolean;
   colorScheme?: 'light' | 'dark';
+  onHorizontalGestureStart?: () => void;
+  onHorizontalGestureEnd?: () => void;
 };
 
 type ErrorBoundaryProps = {
@@ -29,9 +39,14 @@ type CodeBlockData = {
   language: string;
 };
 
-type Segment =
-  | { kind: 'markdown'; content: string }
-  | { kind: 'math'; content: string; display: boolean; raw: string };
+type HorizontalScrollableProps = {
+  children: ReactNode;
+  style?: any;
+  contentContainerStyle?: any;
+  contentWidth?: number;
+  onHorizontalGestureStart?: () => void;
+  onHorizontalGestureEnd?: () => void;
+};
 
 const markdownIt = new MarkdownIt({
   breaks: true,
@@ -40,19 +55,55 @@ const markdownIt = new MarkdownIt({
   typographer: true,
 });
 
-const CHAT_BACKGROUND = 'transparent';
+const markdownItWithMath = new MarkdownIt({
+  breaks: true,
+  html: false,
+  linkify: true,
+  typographer: true,
+}).use(markdownItMath);
+
 const KATEX_RENDER_CSS = KATEX_CSS.replace(/font-display:block/g, 'font-display:swap');
 
 function mathInlineRule(state: any, silent: boolean): boolean {
   const source = state.src as string;
   const start = state.pos as number;
 
+  if (source.startsWith('\\[', start)) {
+    const end = findUnescaped(source, '\\]', start + 2);
+    if (end === -1) return false;
+    const content = source.slice(start + 2, end).trim();
+    if (!content) return false;
+    if (!silent) {
+      const token = state.push('math_block', 'math', 0);
+      token.block = true;
+      token.content = content;
+    }
+    state.pos = end + 2;
+    return true;
+  }
+
   if (source.startsWith('\\(', start)) {
     const end = findUnescaped(source, '\\)', start + 2);
     if (end === -1) return false;
+    const content = source.slice(start + 2, end).trim();
+    if (!content) return false;
     if (!silent) {
       const token = state.push('math_inline', 'math', 0);
-      token.content = source.slice(start + 2, end).trim();
+      token.content = content;
+    }
+    state.pos = end + 2;
+    return true;
+  }
+
+  if (source.startsWith('$$', start)) {
+    const end = findUnescaped(source, '$$', start + 2);
+    if (end === -1) return false;
+    const content = source.slice(start + 2, end).trim();
+    if (!content) return false;
+    if (!silent) {
+      const token = state.push('math_block', 'math', 0);
+      token.block = true;
+      token.content = content;
     }
     state.pos = end + 2;
     return true;
@@ -64,6 +115,7 @@ function mathInlineRule(state: any, silent: boolean): boolean {
 
   const end = findInlineMathEnd(source, start + 1);
   if (end === -1) return false;
+
   const content = source.slice(start + 1, end).trim();
   if (!content) return false;
 
@@ -71,6 +123,7 @@ function mathInlineRule(state: any, silent: boolean): boolean {
     const token = state.push('math_inline', 'math', 0);
     token.content = content;
   }
+
   state.pos = end + 1;
   return true;
 }
@@ -80,16 +133,17 @@ function mathBlockRule(state: any, startLine: number, endLine: number, silent: b
   const max = state.eMarks[startLine];
   const firstLine = state.src.slice(start, max);
   const leadingSpace = firstLine.length - firstLine.trimStart().length;
-  const opener = firstLine.slice(leadingSpace).startsWith('$$')
+  const trimmed = firstLine.slice(leadingSpace);
+  const opener = trimmed.startsWith('$$')
     ? { left: '$$', right: '$$' }
-    : firstLine.slice(leadingSpace).startsWith('\\[')
+    : trimmed.startsWith('\\[')
       ? { left: '\\[', right: '\\]' }
       : null;
 
   if (!opener) return false;
   if (silent) return true;
 
-  const firstContent = firstLine.slice(leadingSpace + opener.left.length);
+  const firstContent = trimmed.slice(opener.left.length);
   const sameLineEnd = firstContent.indexOf(opener.right);
   let content = '';
   let nextLine = startLine + 1;
@@ -98,7 +152,7 @@ function mathBlockRule(state: any, startLine: number, endLine: number, silent: b
     content = firstContent.slice(0, sameLineEnd);
   } else {
     content = firstContent;
-    for (; nextLine < endLine; nextLine++) {
+    for (; nextLine < endLine; nextLine += 1) {
       const lineStart = state.bMarks[nextLine] + state.tShift[nextLine];
       const lineMax = state.eMarks[nextLine];
       const line = state.src.slice(lineStart, lineMax);
@@ -126,19 +180,7 @@ function markdownItMath(md: MarkdownIt) {
   md.block.ruler.before('paragraph', 'math_block', mathBlockRule, {
     alt: ['paragraph', 'reference', 'blockquote', 'list'],
   });
-  md.renderer.rules.math_inline = (tokens, index) => renderMathToHtml(tokens[index].content, false);
-  md.renderer.rules.math_block = (tokens, index) => {
-    const rendered = renderMathToHtml(tokens[index].content, true);
-    return `<div class="math-display">${rendered}</div>\n`;
-  };
 }
-
-const htmlMarkdownIt = new MarkdownIt({
-  breaks: true,
-  html: false,
-  linkify: true,
-  typographer: true,
-}).use(markdownItMath);
 
 class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
@@ -164,8 +206,13 @@ class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryS
 function normalizeMarkdownForStreaming(text: string): string {
   let normalized = text
     .replace(/\r\n?/g, '\n')
-    .replace(/\\`/g, '`')
-    .replace(/[｀´]/g, '`');
+    .replace(/\\`/g, '`');
+
+  normalized = normalized
+    .replace(/\\\\\(/g, '\\(')
+    .replace(/\\\\\)/g, '\\)')
+    .replace(/\\\\\[/g, '\\[')
+    .replace(/\\\\\]/g, '\\]');
 
   const fenceMatches = normalized.match(/(^|\n)(`{3,}|~{3,})/g);
   if (fenceMatches && fenceMatches.length % 2 === 1) {
@@ -201,26 +248,19 @@ function escapeScript(value: string): string {
   return value.replace(/<\/script/gi, '<\\/script');
 }
 
-function hashString(value: string): string {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index++) {
-    hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 function getNodeContent(node: unknown): string {
-  const record = node && typeof node === 'object' ? node as Record<string, unknown> : {};
+  const record = node && typeof node === 'object' ? (node as Record<string, unknown>) : {};
   return typeof record.content === 'string' ? record.content : '';
 }
 
 function getNodeLanguage(node: unknown): string {
-  const record = node && typeof node === 'object' ? node as Record<string, unknown> : {};
-  const raw = typeof record.sourceInfo === 'string'
-    ? record.sourceInfo
-    : typeof record.info === 'string'
-      ? record.info
-      : '';
+  const record = node && typeof node === 'object' ? (node as Record<string, unknown>) : {};
+  const raw =
+    typeof record.sourceInfo === 'string'
+      ? record.sourceInfo
+      : typeof record.info === 'string'
+        ? record.info
+        : '';
   return raw.trim().split(/\s+/)[0] || '';
 }
 
@@ -272,19 +312,22 @@ function PlainTextFallback({
   text: string;
   colorScheme?: 'light' | 'dark';
 }) {
-  const codeBlocks = useMemo(() => extractCodeBlocksFromTokens(markdownIt.parse(normalizeMarkdownForStreaming(text), {})), [text]);
+  const codeBlocks = useMemo(
+    () => extractCodeBlocksFromTokens(markdownIt.parse(normalizeMarkdownForStreaming(text), {})),
+    [text]
+  );
   const dynamicStyles = useMemo(() => createMarkdownStyles(colorScheme), [colorScheme]);
 
   if (codeBlocks.length > 0) {
     return (
-      <View style={markdownStyles.fallbackWrap}>
+      <View style={dynamicStyles.fallbackWrap}>
         {codeBlocks.map((block, index) => renderCodeBlockFallback(block, index, colorScheme))}
       </View>
     );
   }
 
   return (
-    <Text selectable style={[markdownStyles.body, dynamicStyles.body]}>
+    <Text selectable style={[dynamicStyles.body, dynamicStyles.text]}>
       {text}
     </Text>
   );
@@ -292,7 +335,7 @@ function PlainTextFallback({
 
 function isEscaped(value: string, index: number): boolean {
   let slashCount = 0;
-  for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor--) {
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) {
     slashCount += 1;
   }
   return slashCount % 2 === 1;
@@ -322,105 +365,6 @@ function findInlineMathEnd(value: string, start: number): number {
   return -1;
 }
 
-function pushMarkdownSegment(segments: Segment[], content: string) {
-  if (!content) return;
-
-  const previous = segments[segments.length - 1];
-  if (previous?.kind === 'markdown') {
-    previous.content += content;
-    return;
-  }
-
-  segments.push({ kind: 'markdown', content });
-}
-
-function extractMathSegmentsFromText(value: string): Segment[] {
-  const segments: Segment[] = [];
-  let cursor = 0;
-
-  while (cursor < value.length) {
-    const nextDollarDisplay = findUnescaped(value, '$$', cursor);
-    const nextBracketDisplay = findUnescaped(value, '\\[', cursor);
-    const nextParenInline = findUnescaped(value, '\\(', cursor);
-    const nextDollarInline = findUnescaped(value, '$', cursor);
-
-    const candidates = [
-      { index: nextDollarDisplay, left: '$$', right: '$$', display: true },
-      { index: nextBracketDisplay, left: '\\[', right: '\\]', display: true },
-      { index: nextParenInline, left: '\\(', right: '\\)', display: false },
-      {
-        index: nextDollarInline !== nextDollarDisplay ? nextDollarInline : -1,
-        left: '$',
-        right: '$',
-        display: false,
-      },
-    ].filter((candidate) => candidate.index >= 0)
-      .sort((first, second) => first.index - second.index || second.left.length - first.left.length);
-
-    const next = candidates[0];
-    if (!next) {
-      pushMarkdownSegment(segments, value.slice(cursor));
-      break;
-    }
-
-    pushMarkdownSegment(segments, value.slice(cursor, next.index));
-
-    const contentStart = next.index + next.left.length;
-    const end = next.left === '$'
-      ? findInlineMathEnd(value, contentStart)
-      : findUnescaped(value, next.right, contentStart);
-
-    if (end === -1) {
-      pushMarkdownSegment(segments, value.slice(next.index, contentStart));
-      cursor = contentStart;
-      continue;
-    }
-
-    const content = value.slice(contentStart, end);
-    const raw = value.slice(next.index, end + next.right.length);
-
-    if (content.trim()) {
-      segments.push({
-        kind: 'math',
-        content: content.trim(),
-        display: next.display,
-        raw,
-      });
-    } else {
-      pushMarkdownSegment(segments, raw);
-    }
-
-    cursor = end + next.right.length;
-  }
-
-  return segments;
-}
-
-function splitMarkdownAroundCode(text: string): Segment[] {
-  const normalized = normalizeMarkdownForStreaming(text);
-  const segments: Segment[] = [];
-  const fencePattern = /(^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n?\2(?=\n|$)/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = fencePattern.exec(normalized))) {
-    const fenceStart = match.index + match[1].length;
-    const beforeFence = normalized.slice(cursor, fenceStart);
-    for (const segment of extractMathSegmentsFromText(beforeFence)) {
-      segments.push(segment);
-    }
-
-    pushMarkdownSegment(segments, normalized.slice(fenceStart, fencePattern.lastIndex));
-    cursor = fencePattern.lastIndex;
-  }
-
-  for (const segment of extractMathSegmentsFromText(normalized.slice(cursor))) {
-    segments.push(segment);
-  }
-
-  return segments.filter((segment) => segment.kind === 'math' || segment.content.trim().length > 0);
-}
-
 function renderMathToHtml(math: string, display: boolean): string {
   try {
     return katex.renderToString(math, {
@@ -435,22 +379,91 @@ function renderMathToHtml(math: string, display: boolean): string {
   }
 }
 
-function buildMarkdownHtml(markdown: string, colorScheme: 'light' | 'dark'): string {
-  const rendered = htmlMarkdownIt.render(normalizeMarkdownForStreaming(markdown));
+function fallbackMathToText(math: string): string {
+  return math
+    .replace(/\\left/g, '')
+    .replace(/\\right/g, '')
+    .replace(/\\,/g, ' ')
+    .replace(/\\!/g, '')
+    .replace(/\\quad/g, '  ')
+    .replace(/\\qquad/g, '    ')
+    .replace(/\\times/g, ' * ')
+    .replace(/\\cdot/g, ' · ')
+    .replace(/\\pm/g, ' +/- ')
+    .replace(/\\mp/g, ' -/+ ')
+    .replace(/\\leq/g, ' <= ')
+    .replace(/\\geq/g, ' >= ')
+    .replace(/\\neq/g, ' != ')
+    .replace(/\\approx/g, ' ~= ')
+    .replace(/\\equiv/g, ' == ')
+    .replace(/\\sim/g, ' ~ ')
+    .replace(/\\to/g, ' -> ')
+    .replace(/\\rightarrow/g, ' -> ')
+    .replace(/\\leftarrow/g, ' <- ')
+    .replace(/\\infty/g, ' inf ')
+    .replace(/\\sum/g, ' sum ')
+    .replace(/\\prod/g, ' prod ')
+    .replace(/\\int/g, ' int ')
+    .replace(/\\partial/g, ' partial ')
+    .replace(/\\nabla/g, ' nabla ')
+    .replace(/\\alpha/g, ' alpha ')
+    .replace(/\\beta/g, ' beta ')
+    .replace(/\\gamma/g, ' gamma ')
+    .replace(/\\delta/g, ' delta ')
+    .replace(/\\epsilon/g, ' epsilon ')
+    .replace(/\\theta/g, ' theta ')
+    .replace(/\\lambda/g, ' lambda ')
+    .replace(/\\mu/g, ' mu ')
+    .replace(/\\pi/g, ' pi ')
+    .replace(/\\sigma/g, ' sigma ')
+    .replace(/\\phi/g, ' phi ')
+    .replace(/\\omega/g, ' omega ')
+    .replace(/\\Gamma/g, ' Gamma ')
+    .replace(/\\Delta/g, ' Delta ')
+    .replace(/\\Theta/g, ' Theta ')
+    .replace(/\\Lambda/g, ' Lambda ')
+    .replace(/\\Pi/g, ' Pi ')
+    .replace(/\\Sigma/g, ' Sigma ')
+    .replace(/\\Phi/g, ' Phi ')
+    .replace(/\\Omega/g, ' Omega ')
+    .replace(/\\mathrm\s*\{([^{}]+)\}/g, '$1')
+    .replace(/\\text\s*\{([^{}]+)\}/g, '$1')
+    .replace(/\\operatorname\s*\{([^{}]+)\}/g, '$1')
+    .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)')
+    .replace(/\^\{([^{}]+)\}/g, '^($1)')
+    .replace(/_\{([^{}]+)\}/g, '_($1)')
+    .replace(/\^([A-Za-z0-9+\-=()])/g, '^$1')
+    .replace(/_([A-Za-z0-9+\-=()])/g, '_$1')
+    .replace(/[{}]/g, '')
+    .replace(/\\/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function InlineMathText({
+  math,
+  colorScheme = 'light',
+}: {
+  math: string;
+  colorScheme?: 'light' | 'dark';
+}) {
+  const dynamicStyles = useMemo(() => createMarkdownStyles(colorScheme), [colorScheme]);
+  const rendered = useMemo(() => fallbackMathToText(math), [math]);
+
+  return (
+    <Text selectable style={[dynamicStyles.text, dynamicStyles.inlineMath]}>
+      {rendered || math}
+    </Text>
+  );
+}
+
+function buildMathOnlyHtml(math: string, colorScheme: 'light' | 'dark'): string {
   const safeKatexCss = escapeScript(KATEX_RENDER_CSS);
   const dark = colorScheme === 'dark';
   const textColor = dark ? '#E5E7EB' : '#111827';
-  const headingColor = dark ? '#F8FAFC' : '#111827';
-  const mutedColor = dark ? '#CBD5E1' : '#334155';
-  const linkColor = dark ? '#60A5FA' : '#2563eb';
-  const quoteBg = dark ? '#172554' : '#eff6ff';
-  const inlineCodeBg = dark ? '#1F2937' : '#f1f5f9';
-  const inlineCodeColor = dark ? '#FDE68A' : '#7c2d12';
-  const borderColor = dark ? '#334155' : '#cbd5e1';
-  const tableBorder = dark ? '#334155' : '#e2e8f0';
-  const tableHead = dark ? '#1F2937' : '#f1f5f9';
-  const errorBg = dark ? '#3F1D24' : '#fef2f2';
-  const errorColor = dark ? '#FCA5A5' : '#991b1b';
+  const errorBg = dark ? '#3F1D24' : '#FEF2F2';
+  const errorColor = dark ? '#FCA5A5' : '#991B1B';
+  const rendered = renderMathToHtml(math, true);
 
   return `<!doctype html>
 <html>
@@ -459,169 +472,21 @@ function buildMarkdownHtml(markdown: string, colorScheme: 'light' | 'dark'): str
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
 ${safeKatexCss}
-* {
-  box-sizing: border-box;
-}
-html,
-body {
+html, body {
   margin: 0;
   padding: 0;
-  background: ${CHAT_BACKGROUND};
+  background: transparent;
   color: ${textColor};
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans SC", sans-serif;
-  font-size: 15px;
-  line-height: 1.48;
-  overflow-x: hidden;
+  overflow: hidden;
   -webkit-text-size-adjust: 100%;
 }
 body {
-  width: 100%;
-  min-width: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans SC", sans-serif;
 }
-.markdown-html-root {
-  width: 100%;
-  min-width: 0;
-  color: ${textColor};
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  backface-visibility: hidden;
-  transform: translateZ(0);
-}
-p {
-  margin: 0 0 10px;
-}
-p:last-child,
-ul:last-child,
-ol:last-child,
-pre:last-child,
-blockquote:last-child,
-table:last-child,
-.math-display:last-child {
-  margin-bottom: 0;
-}
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: ${headingColor};
-  font-weight: 800;
-  line-height: 1.22;
-  margin: 4px 0 10px;
-}
-h1 { font-size: 24px; }
-h2 { font-size: 21px; }
-h3 { font-size: 18px; }
-h4 { font-size: 16px; }
-h5 { font-size: 15px; }
-h6 {
-  color: ${mutedColor};
-  font-size: 14px;
-}
-a {
-  color: ${linkColor};
-  text-decoration: underline;
-}
-strong {
-  color: ${headingColor};
-  font-weight: 800;
-}
-em {
-  color: ${mutedColor};
-}
-s {
-  color: ${mutedColor};
-}
-ul,
-ol {
-  margin: 0 0 10px;
-  padding-left: 22px;
-}
-li {
-  margin: 0 0 6px;
-}
-li::marker {
-  color: ${linkColor};
-}
-blockquote {
-  margin: 4px 0 10px;
-  padding: 8px 12px;
-  border-left: 3px solid #60a5fa;
-  border-radius: 14px;
-  background: ${quoteBg};
-}
-hr {
-  height: 1px;
-  border: 0;
-  background: ${borderColor};
-  margin: 10px 0 14px;
-}
-table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  margin: 0 0 12px;
-  overflow-x: auto;
-  border-collapse: collapse;
-  border: 1px solid ${borderColor};
-  border-radius: 12px;
-}
-thead {
-  background: ${tableHead};
-}
-th,
-td {
-  padding: 8px 10px;
-  border-right: 1px solid ${tableBorder};
-  border-bottom: 1px solid ${tableBorder};
-  text-align: left;
-  vertical-align: top;
-}
-th {
-  border-color: ${borderColor};
-}
-code {
-  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
-}
-:not(pre) > code {
-  color: ${inlineCodeColor};
-  background: ${inlineCodeBg};
-  border-radius: 8px;
-  padding: 2px 6px;
-}
-pre {
-  margin: 0 0 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-radius: 14px;
-  background: #0b1220;
-  color: #e5e7eb;
-  border: 1px solid #1e293b;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-}
-pre > code {
-  display: block;
-  width: max-content;
-  min-width: 100%;
-  padding: 14px;
-  color: inherit;
-  white-space: pre;
-  overflow-wrap: normal;
-  word-break: normal;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.math-display {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  margin: 10px 0 13px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px 0 4px;
-  text-align: center;
+.math-node {
+  display: inline-block;
+  min-width: max-content;
+  padding: 2px 12px 4px 0;
 }
 .katex {
   color: ${textColor};
@@ -630,11 +495,12 @@ pre > code {
 }
 .katex-display {
   margin: 0;
+  text-align: left;
+  overflow: hidden;
 }
-.math-display > .katex-display > .katex {
+.katex-display > .katex {
   display: inline-block;
-  max-width: 100%;
-  text-align: initial;
+  text-align: left;
 }
 .katex-error {
   color: ${errorColor};
@@ -645,176 +511,222 @@ pre > code {
 </style>
 </head>
 <body>
-<main class="markdown-html-root">${rendered}</main>
+<div class="math-node">${rendered}</div>
 <script>
 (function () {
-  var readyPosted = false;
-  var requestFrame = window.requestAnimationFrame || function (callback) {
-    return setTimeout(callback, 16);
-  };
-
-  function measureHeight() {
-    var root = document.querySelector('.markdown-html-root');
+  function measure() {
     var body = document.body;
-    var documentElement = document.documentElement;
-    return Math.max(
-      root ? Math.ceil(root.getBoundingClientRect().height) : 0,
-      body ? body.scrollHeight : 0,
-      documentElement ? documentElement.scrollHeight : 0
+    var root = document.querySelector('.math-node');
+    var width = Math.max(
+      root ? Math.ceil(root.scrollWidth || root.getBoundingClientRect().width) : 0,
+      body ? Math.ceil(body.scrollWidth) : 0
     );
-  }
-
-  function post(type) {
-    var height = measureHeight();
-    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, height: height }));
-  }
-
-  function postHeight() {
-    post('height');
-  }
-
-  function nudgePaint() {
-    var root = document.querySelector('.markdown-html-root');
-    if (!root) {
-      return;
+    var height = Math.max(
+      root ? Math.ceil(root.scrollHeight || root.getBoundingClientRect().height) : 0,
+      body ? Math.ceil(body.scrollHeight) : 0
+    );
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'size', width: width, height: height }));
     }
-    root.style.webkitTransform = 'translateZ(0)';
-    root.style.transform = 'translateZ(0)';
-    root.style.opacity = '0.999';
-    setTimeout(function () {
-      root.style.opacity = '1';
-    }, 32);
   }
-
-  function postReady() {
-    nudgePaint();
-    if (!readyPosted) {
-      readyPosted = true;
-      post('ready');
-      return;
-    }
-    postHeight();
-  }
-
-  function queueReady() {
-    postHeight();
-    requestFrame(function () {
-      requestFrame(postReady);
-    });
-  }
-
-  function openExternal(url) {
-    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: url }));
-  }
-
-  document.addEventListener('click', function (event) {
-    var target = event.target;
-    while (target && target.tagName !== 'A') {
-      target = target.parentElement;
-    }
-    if (!target || !target.href) {
-      return;
-    }
-    event.preventDefault();
-    openExternal(target.href);
-  });
-
-  window.addEventListener('load', queueReady);
-  window.addEventListener('resize', postHeight);
-  if (window.ResizeObserver) {
-    new ResizeObserver(postHeight).observe(document.body);
-  }
+  window.addEventListener('load', measure);
+  window.addEventListener('resize', measure);
   if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(queueReady).catch(queueReady);
+    document.fonts.ready.then(measure).catch(measure);
   }
-  setTimeout(postHeight, 0);
-  setTimeout(queueReady, 80);
-  setTimeout(queueReady, 240);
-  setTimeout(queueReady, 700);
+  setTimeout(measure, 0);
+  setTimeout(measure, 80);
+  setTimeout(measure, 240);
 })();
 </script>
 </body>
 </html>`;
 }
 
-function HtmlMarkdownView({ text, fallback, colorScheme = 'light' }: { text: string; fallback: ReactNode; colorScheme?: 'light' | 'dark' }) {
-  const html = useMemo(() => buildMarkdownHtml(text, colorScheme), [colorScheme, text]);
-  const htmlKey = useMemo(() => `markdown-html-${colorScheme}-${hashString(text)}`, [colorScheme, text]);
-  const [height, setHeight] = useState(32);
-  const [failed, setFailed] = useState(false);
-  const [paintReady, setPaintReady] = useState(false);
-  const ready = paintReady && height > 0;
+function HorizontalScrollable({
+  children,
+  style,
+  contentContainerStyle,
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
+}: HorizontalScrollableProps) {
+  const lockedRef = useRef(false);
 
-  useEffect(() => {
-    setFailed(false);
-    setPaintReady(false);
-    setHeight(32);
-  }, [html]);
+  const beginLock = useCallback(() => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    onHorizontalGestureStart?.();
+  }, [onHorizontalGestureStart]);
 
-  useEffect(() => {
-    if (ready || failed) return undefined;
-    const timer = setTimeout(() => setFailed(true), 2200);
-    return () => clearTimeout(timer);
-  }, [failed, ready]);
+  const endLock = useCallback(() => {
+    if (!lockedRef.current) return;
+    lockedRef.current = false;
+    onHorizontalGestureEnd?.();
+  }, [onHorizontalGestureEnd]);
+
+  useEffect(() => () => endLock(), [endLock]);
+
+  return (
+    <NativeViewGestureHandler>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        alwaysBounceVertical={false}
+        showsHorizontalScrollIndicator
+        style={[style, localStyles.scrollViewport]}
+        contentContainerStyle={[contentContainerStyle, localStyles.scrollContent]}
+        onTouchEnd={endLock}
+        onTouchCancel={endLock}
+        onScrollBeginDrag={beginLock}
+        onMomentumScrollBegin={beginLock}
+        onScrollEndDrag={endLock}
+        onMomentumScrollEnd={endLock}
+      >
+        {children}
+      </ScrollView>
+    </NativeViewGestureHandler>
+  );
+}
+
+function EagerHorizontalScrollable({
+  children,
+  style,
+  contentContainerStyle,
+  contentWidth,
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
+}: HorizontalScrollableProps) {
+  const lockedRef = useRef(false);
+  const forcedContentWidth =
+    typeof contentWidth === 'number' && Number.isFinite(contentWidth)
+      ? Math.max(1, Math.ceil(contentWidth))
+      : undefined;
+
+  const beginLock = useCallback(() => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    onHorizontalGestureStart?.();
+  }, [onHorizontalGestureStart]);
+
+  const endLock = useCallback(() => {
+    if (!lockedRef.current) return;
+    lockedRef.current = false;
+    onHorizontalGestureEnd?.();
+  }, [onHorizontalGestureEnd]);
+
+  useEffect(() => () => endLock(), [endLock]);
+
+  return (
+    <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        alwaysBounceVertical={false}
+        showsHorizontalScrollIndicator
+        style={[style, localStyles.scrollViewport]}
+        contentContainerStyle={[
+          contentContainerStyle,
+          localStyles.eagerScrollContent,
+          forcedContentWidth
+            ? { width: forcedContentWidth, minWidth: forcedContentWidth }
+            : undefined,
+        ]}
+        onTouchStart={beginLock}
+        onTouchEnd={endLock}
+        onTouchCancel={endLock}
+        onScrollBeginDrag={beginLock}
+        onMomentumScrollBegin={beginLock}
+        onScrollEndDrag={endLock}
+        onMomentumScrollEnd={endLock}
+      >
+        {children}
+      </ScrollView>
+    </NativeViewGestureHandler>
+  );
+}
+
+function BlockMathView({
+  math,
+  colorScheme = 'light',
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
+}: {
+  math: string;
+  colorScheme?: 'light' | 'dark';
+  onHorizontalGestureStart?: () => void;
+  onHorizontalGestureEnd?: () => void;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const dynamicStyles = useMemo(() => createMarkdownStyles(colorScheme), [colorScheme]);
+  const html = useMemo(() => buildMathOnlyHtml(math, colorScheme), [colorScheme, math]);
+  const [contentSize, setContentSize] = useState({ width: 24, height: 30 });
+  const minScrollableWidth = Math.max(24, Math.round(windowWidth * 1.35));
+  const resolvedWidth = Math.max(contentSize.width, minScrollableWidth);
 
   function handleMessage(event: WebViewMessageEvent) {
     try {
-      const payload = JSON.parse(event.nativeEvent.data) as { type?: string; height?: number; url?: string };
+      const payload = JSON.parse(event.nativeEvent.data) as {
+        type?: string;
+        width?: number;
+        height?: number;
+      };
+
       if (
-        (payload.type === 'height' || payload.type === 'ready') &&
+        payload.type === 'size' &&
+        typeof payload.width === 'number' &&
+        Number.isFinite(payload.width) &&
         typeof payload.height === 'number' &&
         Number.isFinite(payload.height)
       ) {
-        setHeight(Math.max(1, Math.ceil(payload.height)));
-        if (payload.type === 'ready') {
-          setPaintReady(true);
-        }
-      } else if (payload.type === 'link' && typeof payload.url === 'string') {
-        void Linking.openURL(payload.url);
+        setContentSize({
+          width: Math.max(24, Math.ceil(payload.width)),
+          height: Math.max(24, Math.ceil(payload.height)),
+        });
       }
     } catch {
-      // Ignore malformed WebView messages.
+      // Ignore malformed messages.
     }
-  }
-
-  function shouldStartLoadWithRequest(request: WebViewNavigation) {
-    if (!request.url || request.url === 'about:blank' || request.url.startsWith('data:')) {
-      return true;
-    }
-
-    void Linking.openURL(request.url);
-    return false;
-  }
-
-  if (failed) {
-    return <>{fallback}</>;
   }
 
   return (
-    <View style={[markdownStyles.htmlWrap, ready && { height }]}>
-      {!ready && <View style={markdownStyles.htmlFallbackWrap}>{fallback}</View>}
-      <WebView
-        key={htmlKey}
-        originWhitelist={['*']}
-        source={{ html }}
-        style={[markdownStyles.htmlWebView, !ready && markdownStyles.htmlWebViewPreload]}
-        containerStyle={markdownStyles.htmlWebViewContainer}
-        pointerEvents={ready ? 'auto' : 'none'}
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        showsVerticalScrollIndicator={false}
-        javaScriptEnabled
-        domStorageEnabled={false}
-        cacheEnabled={false}
-        setSupportMultipleWindows={false}
-        automaticallyAdjustContentInsets={false}
-        androidLayerType="none"
-        onError={() => setFailed(true)}
-        onHttpError={() => setFailed(true)}
-        onMessage={handleMessage}
-        onShouldStartLoadWithRequest={shouldStartLoadWithRequest}
-      />
-    </View>
+    <EagerHorizontalScrollable
+      style={dynamicStyles.mathBlockWrap}
+      contentContainerStyle={dynamicStyles.mathBlockScrollContent}
+      contentWidth={resolvedWidth}
+      onHorizontalGestureStart={onHorizontalGestureStart}
+      onHorizontalGestureEnd={onHorizontalGestureEnd}
+    >
+      <View
+        collapsable={false}
+        style={[
+          dynamicStyles.mathBlockInner,
+          { width: resolvedWidth, minWidth: resolvedWidth, minHeight: contentSize.height },
+        ]}
+      >
+        <WebView
+          pointerEvents="none"
+          originWhitelist={['*']}
+          source={{ html }}
+          style={{
+            width: resolvedWidth,
+            minWidth: resolvedWidth,
+            height: contentSize.height,
+            backgroundColor: 'transparent',
+          }}
+          scrollEnabled={false}
+          nestedScrollEnabled
+          javaScriptEnabled
+          domStorageEnabled={false}
+          cacheEnabled={false}
+          setSupportMultipleWindows={false}
+          automaticallyAdjustContentInsets={false}
+          androidLayerType="none"
+          onMessage={handleMessage}
+        />
+      </View>
+    </EagerHorizontalScrollable>
   );
 }
 
@@ -822,6 +734,8 @@ function MarkdownBody({
   text,
   deferCodeHighlight = false,
   colorScheme = 'light',
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
 }: Props) {
   const normalized = useMemo(() => normalizeMarkdownForStreaming(text), [text]);
   const dynamicStyles = useMemo(() => createMarkdownStyles(colorScheme), [colorScheme]);
@@ -837,6 +751,8 @@ function MarkdownBody({
             language={getNodeLanguage(node)}
             deferHighlight={deferCodeHighlight}
             colorScheme={colorScheme}
+            onHorizontalGestureStart={onHorizontalGestureStart}
+            onHorizontalGestureEnd={onHorizontalGestureEnd}
           />
         ),
         fence: (node) => (
@@ -846,18 +762,43 @@ function MarkdownBody({
             language={getNodeLanguage(node)}
             deferHighlight={deferCodeHighlight}
             colorScheme={colorScheme}
+            onHorizontalGestureStart={onHorizontalGestureStart}
+            onHorizontalGestureEnd={onHorizontalGestureEnd}
           />
         ),
         table: (node, children) => (
-          <ScrollView key={node.key} horizontal showsHorizontalScrollIndicator={false} style={markdownStyles.tableWrap}>
-            <View style={markdownStyles.table}>{children}</View>
-          </ScrollView>
+          <HorizontalScrollable
+            key={node.key}
+            style={dynamicStyles.tableWrap}
+            contentContainerStyle={dynamicStyles.tableScrollContent}
+            onHorizontalGestureStart={onHorizontalGestureStart}
+            onHorizontalGestureEnd={onHorizontalGestureEnd}
+          >
+            <View style={dynamicStyles.table}>{children}</View>
+          </HorizontalScrollable>
+        ),
+        math_inline: (node) => (
+          <InlineMathText
+            key={node.key}
+            math={getNodeContent(node)}
+            colorScheme={colorScheme}
+          />
+        ),
+        math_block: (node) => (
+          <BlockMathView
+            key={node.key}
+            math={getNodeContent(node)}
+            colorScheme={colorScheme}
+            onHorizontalGestureStart={onHorizontalGestureStart}
+            onHorizontalGestureEnd={onHorizontalGestureEnd}
+          />
         ),
       }}
       onLinkPress={(url) => {
         void Linking.openURL(url);
         return false;
       }}
+      markdownit={markdownItWithMath}
       style={dynamicStyles}
     >
       {normalized}
@@ -865,44 +806,12 @@ function MarkdownBody({
   );
 }
 
-function containsMath(text: string): boolean {
-  return splitMarkdownAroundCode(text).some((segment) => segment.kind === 'math');
-}
-
-function SegmentedMarkdownBody({
-  text,
-  deferCodeHighlight,
-  colorScheme = 'light',
-}: Props) {
-  const hasMath = useMemo(() => !deferCodeHighlight && containsMath(text), [deferCodeHighlight, text]);
-  const fallback = useMemo(
-    () => (
-      <MarkdownBody
-        text={text}
-        deferCodeHighlight={deferCodeHighlight}
-        colorScheme={colorScheme}
-      />
-    ),
-    [colorScheme, deferCodeHighlight, text]
-  );
-
-  if (!hasMath) {
-    return (
-      <MarkdownBody
-        text={text}
-        deferCodeHighlight={deferCodeHighlight}
-        colorScheme={colorScheme}
-      />
-    );
-  }
-
-  return <HtmlMarkdownView text={text} fallback={fallback} colorScheme={colorScheme} />;
-}
-
 function MarkdownRendererComponent({
   text,
   deferCodeHighlight = false,
   colorScheme = 'light',
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
 }: Props) {
   return (
     <MarkdownErrorBoundary
@@ -913,16 +822,33 @@ function MarkdownRendererComponent({
         />
       }
     >
-      <SegmentedMarkdownBody
+      <MarkdownBody
         text={text}
         deferCodeHighlight={deferCodeHighlight}
         colorScheme={colorScheme}
+        onHorizontalGestureStart={onHorizontalGestureStart}
+        onHorizontalGestureEnd={onHorizontalGestureEnd}
       />
     </MarkdownErrorBoundary>
   );
 }
 
 export const MarkdownRenderer = memo(MarkdownRendererComponent);
+
+const localStyles = StyleSheet.create({
+  scrollViewport: {
+    overflow: 'hidden',
+  },
+  scrollContent: {
+    alignSelf: 'flex-start',
+    flexGrow: 0,
+  },
+  eagerScrollContent: {
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    flexGrow: 0,
+  },
+});
 
 function createMarkdownStyles(colorScheme: 'light' | 'dark' = 'light') {
   const dark = colorScheme === 'dark';
@@ -939,204 +865,214 @@ function createMarkdownStyles(colorScheme: 'light' | 'dark' = 'light') {
   const tableHead = dark ? '#1F2937' : '#F1F5F9';
 
   return StyleSheet.create({
-  body: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  fallbackWrap: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  paragraph: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 0,
-    marginBottom: 10,
-  },
-  heading1: {
-    color: heading,
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  heading2: {
-    color: heading,
-    fontSize: 21,
-    fontWeight: '800',
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  heading3: {
-    color: heading,
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 3,
-    marginBottom: 8,
-  },
-  heading4: {
-    color: heading,
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 3,
-    marginBottom: 8,
-  },
-  heading5: {
-    color: heading,
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  heading6: {
-    color: muted,
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  strong: {
-    color: heading,
-    fontWeight: '800',
-  },
-  em: {
-    color: muted,
-    fontStyle: 'italic',
-  },
-  s: {
-    color: faint,
-    textDecorationLine: 'line-through',
-  },
-  bullet_list: {
-    marginTop: 0,
-    marginBottom: 10,
-  },
-  ordered_list: {
-    marginTop: 0,
-    marginBottom: 10,
-  },
-  list_item: {
-    marginBottom: 6,
-  },
-  bullet_list_icon: {
-    color: link,
-  },
-  bullet_list_content: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  ordered_list_icon: {
-    color: link,
-  },
-  ordered_list_content: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  blockquote: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#60A5FA',
-    backgroundColor: quoteBg,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  hr: {
-    backgroundColor: border,
-    height: 1,
-    marginTop: 10,
-    marginBottom: 14,
-  },
-  link: {
-    color: link,
-    textDecorationLine: 'underline',
-  },
-  code_inline: {
-    color: inlineCodeText,
-    backgroundColor: inlineCodeBg,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontFamily: 'monospace',
-  },
-  tableWrap: {
-    maxWidth: '100%',
-    marginBottom: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: border,
-  },
-  table: {
-    minWidth: 260,
-  },
-  thead: {
-    backgroundColor: tableHead,
-  },
-  th: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: border,
-  },
-  tr: {
-    borderBottomWidth: 1,
-    borderColor: rowBorder,
-    flexDirection: 'row',
-  },
-  td: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRightWidth: 1,
-    borderColor: rowBorder,
-  },
-  text: {
-    color: text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  code_block: {
-    color: '#E5E7EB',
-    backgroundColor: '#0B1220',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  fence: {
-    color: '#E5E7EB',
-    backgroundColor: '#0B1220',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  htmlWrap: {
-    width: '100%',
-    alignSelf: 'stretch',
-    minHeight: 1,
-    backgroundColor: CHAT_BACKGROUND,
-    overflow: 'hidden',
-  },
-  htmlWebView: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: CHAT_BACKGROUND,
-  },
-  htmlWebViewPreload: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    opacity: 0.02,
-  },
-  htmlFallbackWrap: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  htmlWebViewContainer: {
-    backgroundColor: CHAT_BACKGROUND,
-  },
+    body: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    fallbackWrap: {
+      width: '100%',
+      alignSelf: 'stretch',
+    },
+    paragraph: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: 0,
+      marginBottom: 10,
+    },
+    heading1: {
+      color: heading,
+      fontSize: 24,
+      fontWeight: '800',
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    heading2: {
+      color: heading,
+      fontSize: 21,
+      fontWeight: '800',
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    heading3: {
+      color: heading,
+      fontSize: 18,
+      fontWeight: '800',
+      marginTop: 3,
+      marginBottom: 8,
+    },
+    heading4: {
+      color: heading,
+      fontSize: 16,
+      fontWeight: '800',
+      marginTop: 3,
+      marginBottom: 8,
+    },
+    heading5: {
+      color: heading,
+      fontSize: 15,
+      fontWeight: '800',
+      marginTop: 2,
+      marginBottom: 6,
+    },
+    heading6: {
+      color: muted,
+      fontSize: 14,
+      fontWeight: '800',
+      marginTop: 2,
+      marginBottom: 6,
+    },
+    strong: {
+      color: heading,
+      fontWeight: '800',
+    },
+    em: {
+      color: muted,
+      fontStyle: 'italic',
+    },
+    s: {
+      color: faint,
+      textDecorationLine: 'line-through',
+    },
+    bullet_list: {
+      marginTop: 0,
+      marginBottom: 10,
+    },
+    ordered_list: {
+      marginTop: 0,
+      marginBottom: 10,
+    },
+    list_item: {
+      marginBottom: 6,
+    },
+    bullet_list_icon: {
+      color: link,
+    },
+    bullet_list_content: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    ordered_list_icon: {
+      color: link,
+    },
+    ordered_list_content: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    blockquote: {
+      borderLeftWidth: 3,
+      borderLeftColor: '#60A5FA',
+      backgroundColor: quoteBg,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 14,
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    hr: {
+      backgroundColor: border,
+      height: 1,
+      marginTop: 10,
+      marginBottom: 14,
+    },
+    link: {
+      color: link,
+      textDecorationLine: 'underline',
+    },
+    code_inline: {
+      color: inlineCodeText,
+      backgroundColor: inlineCodeBg,
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    tableWrap: {
+      maxWidth: '100%',
+      marginBottom: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: border,
+      overflow: 'hidden',
+    },
+    tableScrollContent: {
+      minWidth: '100%',
+      flexGrow: 1,
+    },
+    table: {
+      minWidth: 320,
+      alignSelf: 'flex-start',
+    },
+    thead: {
+      backgroundColor: tableHead,
+    },
+    tbody: {},
+    th: {
+      minWidth: 88,
+      flexShrink: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRightWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: border,
+      justifyContent: 'center',
+    },
+    tr: {
+      borderBottomWidth: 1,
+      borderColor: rowBorder,
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    td: {
+      minWidth: 88,
+      flexShrink: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRightWidth: 1,
+      borderColor: rowBorder,
+      justifyContent: 'center',
+    },
+    text: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    textgroup: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    inlineMath: {
+      color: text,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    code_block: {
+      color: '#E5E7EB',
+      backgroundColor: '#0B1220',
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    fence: {
+      color: '#E5E7EB',
+      backgroundColor: '#0B1220',
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    mathBlockWrap: {
+      width: '100%',
+      marginBottom: 12,
+    },
+    mathBlockScrollContent: {
+      minWidth: '100%',
+      flexGrow: 1,
+    },
+    mathBlockInner: {
+      paddingVertical: 2,
+      paddingRight: 12,
+      alignSelf: 'flex-start',
+    },
   });
 }
 

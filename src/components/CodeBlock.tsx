@@ -9,6 +9,8 @@ type Props = {
   language?: string;
   deferHighlight?: boolean;
   colorScheme?: 'light' | 'dark';
+  onHorizontalGestureStart?: () => void;
+  onHorizontalGestureEnd?: () => void;
 };
 
 type HighlightKind =
@@ -449,7 +451,13 @@ function CodeContent({
   return <PlainCode code={code} width={width} wrap={wrap} />;
 }
 
-function CodeBlockComponent({ code, language, deferHighlight = false }: Props) {
+function CodeBlockComponent({
+  code,
+  language,
+  deferHighlight = false,
+  onHorizontalGestureStart,
+  onHorizontalGestureEnd,
+}: Props) {
   const [copied, setCopied] = useState(false);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [codeBodyWidth, setCodeBodyWidth] = useState(0);
@@ -472,6 +480,13 @@ function CodeBlockComponent({ code, language, deferHighlight = false }: Props) {
     const timer = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
+
+  useEffect(
+    () => () => {
+      onHorizontalGestureEnd?.();
+    },
+    [onHorizontalGestureEnd]
+  );
 
   async function copyCode() {
     if (!normalizedCode.trim()) return;
@@ -551,6 +566,12 @@ function CodeBlockComponent({ code, language, deferHighlight = false }: Props) {
               showsHorizontalScrollIndicator
               style={styles.codeScroll}
               contentContainerStyle={[styles.codeScrollContent, { minWidth: fullscreenContentWidth }]}
+              onTouchStart={onHorizontalGestureStart}
+              onTouchEnd={onHorizontalGestureEnd}
+              onTouchCancel={onHorizontalGestureEnd}
+              onScrollBeginDrag={onHorizontalGestureStart}
+              onMomentumScrollEnd={onHorizontalGestureEnd}
+              onScrollEndDrag={onHorizontalGestureEnd}
             >
               <CodeContent
                 canHighlight={canHighlight}

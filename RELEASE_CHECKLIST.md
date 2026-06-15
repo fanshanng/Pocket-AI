@@ -72,7 +72,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath E:\android\projects\ai-chat-pocket\a
 建议标题：
 
 ```text
-Pocket AI v1.1.0
+Pocket AI v1.2.0
 ```
 
 建议附件：

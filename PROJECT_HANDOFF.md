@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.1.0` / Android `versionCode 34`.
+- Current version: `1.2.0` / Android `versionCode 35`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -181,10 +181,10 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current verified APK SHA-256 for v1.1.0:
+Current verified APK SHA-256 for v1.2.0:
 
 ```text
-E1C9026B1EC18FB60A7326037D6689C50B663662CF1FC95BEE2AC6319546813F
+448A8F45C7D894FF463E1C9EEB000A38AD0E836C6C3DCDE2A549439AA4C82D3A
 ```
 
 Install on connected Android device:

@@ -55,6 +55,7 @@ import {
   StopIcon,
   TrashIcon,
 } from './src/components/AppIcons';
+import { DrawerGestureContext } from './src/components/DrawerGestureContext';
 import { MessageBubble } from './src/components/MessageBubble';
 import { SlideFadePresence } from './src/components/SlideFadePresence';
 import { COPY } from './src/i18n/copy';
@@ -159,6 +160,7 @@ const STREAMING_SCROLL_INTERVAL_MS = 260;
 const CHAT_BOTTOM_FOLLOW_THRESHOLD = 96;
 const DRAWER_SWIPE_SLOPE = 0.35;
 const DRAWER_SWIPE_MIN_DISTANCE = 5;
+const DRAWER_OPEN_EDGE_WIDTH = 32;
 const SESSION_CLOSE_SWIPE_SLOPE = 0.08;
 const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 1;
 const COMPOSER_VISIBLE_BOTTOM_GAP = 8;
@@ -275,6 +277,11 @@ export default function App() {
   const bottomSheetAnimationIdRef = useRef(0);
   const bottomSheetCloseFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomSheetAfterCloseRef = useRef<(() => void) | null>(null);
+  const draftProfileRef = useRef<ApiProfile>(DEFAULT_PROFILE);
+  const apiKeyRef = useRef('');
+  const draftProfileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipDraftProfileAutosavePassesRef = useRef(0);
+  const profileSaveRequestIdRef = useRef(0);
   const [ready, setReady] = useState(false);
   const [persisted, setPersisted] = useState<PersistedState>(EMPTY_STATE);
   const [apiKey, setApiKey] = useState('');
@@ -310,6 +317,8 @@ export default function App() {
   const [advancedApiSettingsOpen, setAdvancedApiSettingsOpen] = useState(false);
   const [reasoningEffortOptions, setReasoningEffortOptions] = useState<ReasoningEffort[]>(['none']);
   const [reasoningEffortsFetched, setReasoningEffortsFetched] = useState(false);
+  const drawerGestureLockCountRef = useRef(0);
+  const [horizontalGestureLockVersion, setHorizontalGestureLockVersion] = useState(0);
   const handleRegenerateMessage = useCallback((messageId: string) => {
     regenerateAssistantMessageRef.current(messageId);
   }, []);
@@ -379,24 +388,17 @@ export default function App() {
   const chatOpenDrawerPanResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
-          if (
-            sessionsVisible ||
-            settingsVisible ||
-            modelPickerVisible ||
-            chatMenuVisible
-          ) {
-            return false;
-          }
-          return isLooseDirectionalSwipe(gestureState, 'right', 7);
-        },
         onMoveShouldSetPanResponder: (_, gestureState) => {
           if (
             sessionsVisible ||
             settingsVisible ||
             modelPickerVisible ||
-            chatMenuVisible
+            chatMenuVisible ||
+            drawerGestureLockCountRef.current > 0
           ) {
+            return false;
+          }
+          if (gestureState.x0 > Math.min(windowWidth * 0.1, DRAWER_OPEN_EDGE_WIDTH)) {
             return false;
           }
           return isLooseDirectionalSwipe(gestureState, 'right', 7);
@@ -457,10 +459,34 @@ export default function App() {
   const sessionSearchNeedsRaise = sessionSearchQuery.length > 28 || sessionSearchQuery.includes('\n');
   const sessionSearchIsRaised = sessionSearchRaised && sessionSearchNeedsRaise;
   const drawerBlankSwipeFooterHeight = visibleConversations.length < 6 ? Math.max(180, windowHeight * 0.28) : 56;
+  void horizontalGestureLockVersion;
+  const horizontalGestureLocked = drawerGestureLockCountRef.current > 0;
+  const lockDrawerGesture = useCallback(() => {
+    drawerGestureLockCountRef.current += 1;
+    setHorizontalGestureLockVersion((value) => value + 1);
+  }, []);
+  const unlockDrawerGesture = useCallback(() => {
+    drawerGestureLockCountRef.current = Math.max(0, drawerGestureLockCountRef.current - 1);
+    setHorizontalGestureLockVersion((value) => value + 1);
+  }, []);
+  const drawerGestureContextValue = useMemo(
+    () => ({
+      lockDrawerGesture,
+      unlockDrawerGesture,
+      horizontalGestureLocked,
+    }),
+    [horizontalGestureLocked, lockDrawerGesture, unlockDrawerGesture]
+  );
   const renderDrawerSession = useCallback(
     ({ item: conversation }: { item: ConversationRecord }) => {
       const active = conversation.id === activeConversation?.id;
       const selected = selectedSessionIds.includes(conversation.id);
+      const messageCount = conversation.messages.length;
+      const sessionMetaParts = [
+        conversation.model,
+        uiLanguage === 'zh' ? `${messageCount} 条消息` : `${messageCount} messages`,
+        formatRelativeTime(conversation.updatedAt, uiLanguage),
+      ];
       return (
         <Pressable
           style={[
@@ -489,10 +515,10 @@ export default function App() {
                 <Text style={[styles.drawerSessionTitle, { color: theme.text }]} numberOfLines={1}>
                   {conversation.title}
                 </Text>
-                <Text style={[styles.drawerSessionTime, { color: theme.muted }]} numberOfLines={1}>
-                  {formatRelativeTime(conversation.updatedAt, uiLanguage)}
-                </Text>
               </View>
+              <Text style={[styles.drawerSessionSubtitle, { color: theme.muted }]} numberOfLines={1}>
+                {sessionMetaParts.join(' | ')}
+              </Text>
             </View>
           </View>
         </Pressable>
@@ -521,6 +547,28 @@ export default function App() {
     }
     savePersistedState(persisted).catch(() => undefined);
   }, [persisted, ready]);
+
+  useEffect(() => {
+    draftProfileRef.current = draftProfile;
+  }, [draftProfile]);
+
+  useEffect(() => {
+    apiKeyRef.current = apiKey;
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    queueDraftApiProfileSave();
+  }, [apiKey, draftProfile, ready, settingsSection, settingsVisible]);
+
+  useEffect(() => () => {
+    if (draftProfileSaveTimerRef.current) {
+      clearTimeout(draftProfileSaveTimerRef.current);
+      draftProfileSaveTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!ready || persisted.conversations.length === 0) {
@@ -1285,24 +1333,29 @@ export default function App() {
   }
 
   async function selectDraftApiProfile(profile: ApiProfile) {
+    skipDraftProfileAutosavePassesRef.current = 2;
     setDraftProfile(profile);
     setApiKey(await loadProfileApiKey(profile.id));
     resetApiProfileEditor(profile);
   }
 
   function createNewApiProfile() {
-    const profile: ApiProfile = {
+    const profile = sanitizeProfile({
       ...DEFAULT_PROFILE,
       id: makeId('profile'),
       label: `${DEFAULT_PROFILE.label} ${persisted.profiles.length + 1}`,
-    };
+    });
     setPersisted((current) => ({
       ...current,
       profiles: [...current.profiles, profile],
+      activeProfileId: profile.id,
+      profile,
     }));
+    skipDraftProfileAutosavePassesRef.current = 2;
     setDraftProfile(profile);
     setApiKey('');
     resetApiProfileEditor(profile);
+    void saveProfileApiKey(profile.id, '');
   }
 
   function applyUiLanguage(language: UiLanguage) {
@@ -1343,11 +1396,13 @@ export default function App() {
     }
   }
 
-  async function handleSaveApiProfile() {
-    let profile = sanitizeProfile(draftProfile);
+  async function persistDraftApiProfile(options: { refetchModels?: boolean; profile?: ApiProfile; key?: string } = {}) {
+    const requestId = profileSaveRequestIdRef.current + 1;
+    profileSaveRequestIdRef.current = requestId;
+    let profile = sanitizeProfile(options.profile ?? draftProfileRef.current);
     setSavingProfile(true);
     try {
-      const key = apiKey.trim();
+      const key = (options.key ?? apiKeyRef.current).trim();
       await saveProfileApiKey(profile.id, key);
       const nextReasoningEfforts = getCachedReasoningEffortsForProfile({
         ...profile,
@@ -1357,7 +1412,7 @@ export default function App() {
         ...profile,
         cachedReasoningEfforts: nextReasoningEfforts,
       };
-      if (key) {
+      if (key && options.refetchModels) {
         try {
           const result = await fetchAvailableModels({ profile, apiKey: key });
           profile = {
@@ -1371,6 +1426,9 @@ export default function App() {
           };
         }
       }
+      if (profileSaveRequestIdRef.current !== requestId) {
+        return profile;
+      }
       setPersisted((current) => {
         const profiles = upsertProfile(current.profiles, profile);
         return {
@@ -1383,10 +1441,36 @@ export default function App() {
       setDraftProfile(profile);
       setAvailableModels(getCachedModelsForProfile(profile));
       setReasoningEffortOptions(getCachedReasoningEffortsForProfile(profile));
-      closeBottomSheet();
+      return profile;
     } finally {
-      setSavingProfile(false);
+      if (profileSaveRequestIdRef.current === requestId) {
+        setSavingProfile(false);
+      }
     }
+  }
+
+  async function handleSaveApiProfile() {
+    const savedProfile = await persistDraftApiProfile({ refetchModels: true });
+    if (!savedProfile) {
+      return;
+    }
+  }
+
+  function queueDraftApiProfileSave(delayMs = 220) {
+    if (skipDraftProfileAutosavePassesRef.current > 0) {
+      skipDraftProfileAutosavePassesRef.current -= 1;
+      return;
+    }
+    if (!settingsVisible || settingsSection !== 'api') {
+      return;
+    }
+    if (draftProfileSaveTimerRef.current) {
+      clearTimeout(draftProfileSaveTimerRef.current);
+    }
+    draftProfileSaveTimerRef.current = setTimeout(() => {
+      draftProfileSaveTimerRef.current = null;
+      void persistDraftApiProfile();
+    }, delayMs);
   }
 
   function resetApiProfileEditor(profile: ApiProfile) {
@@ -1413,7 +1497,7 @@ export default function App() {
   function updateDraftProfileWithReasoningReset(updater: (current: ApiProfile) => ApiProfile) {
     setReasoningEffortsFetched(false);
     setDraftProfile((current) => {
-      const next = updater(current);
+      const next = sanitizeProfile(updater(current));
       return {
         ...next,
         cachedModels: getCachedModelsForProfile(next),
@@ -1438,7 +1522,8 @@ export default function App() {
       profile.organization ? copy.organization : '',
       profile.systemPrompt ? copy.systemPrompt : '',
     ];
-    return activeItems.filter(Boolean).join(' | ');
+    const summary = activeItems.filter(Boolean).join(' | ');
+    return summary || copy.advancedDefaultsSummary;
   }
 
   function openExternalUrl(url: string) {
@@ -1627,6 +1712,31 @@ export default function App() {
     } finally {
       setFetchingModels(false);
     }
+  }
+
+  async function switchActiveApiProfile(profileId: string) {
+    const nextProfile = persisted.profiles.find((profile) => profile.id === profileId);
+    if (!nextProfile || nextProfile.id === persisted.activeProfileId) {
+      closeBottomSheet();
+      return;
+    }
+
+    const key = await loadProfileApiKey(nextProfile.id);
+    setPersisted((current) => ({
+      ...current,
+      activeProfileId: nextProfile.id,
+      profile: nextProfile,
+    }));
+    skipDraftProfileAutosavePassesRef.current = 2;
+    setDraftProfile(nextProfile);
+    setApiKey(key);
+    resetApiProfileEditor(nextProfile);
+    setAvailableModels(getCachedModelsForProfile(nextProfile));
+    closeBottomSheet(true, () => {
+      if (key.trim()) {
+        void fetchModelsForProfile(nextProfile, key);
+      }
+    });
   }
 
   function openModelPicker() {
@@ -2701,45 +2811,56 @@ export default function App() {
                 </Pressable>
           </SlideFadePresence>
 
-          <View style={styles.chatShell} {...chatOpenDrawerPanResponder.panHandlers}>
-            <ScrollView
-              ref={scrollRef}
-              style={styles.chatScroll}
-              contentContainerStyle={styles.chatContent}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              onScroll={handleChatScroll}
-              scrollEventThrottle={80}
-              onContentSizeChange={scheduleStreamingScroll}
-            >
-              {activeConversation ? (
-                activeConversation.messages.length > 0 ? (
-                  activeConversation.messages.map((message) => (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      language={uiLanguage}
-                      colorScheme={theme.scheme}
-                      isStreaming={sending && message.id === streamingMessageIdRef.current}
-                      onRegenerate={handleRegenerateMessage}
-                      onEditUserMessage={editUserMessage}
-                      onSwitchVariant={switchUserMessageVariant}
-                    />
-                  ))
+          <DrawerGestureContext.Provider value={drawerGestureContextValue}>
+          <View style={styles.chatShell}>
+            {!sessionsVisible && !settingsVisible && !modelPickerVisible && !chatMenuVisible && (
+              <View
+                pointerEvents="box-only"
+                style={[styles.drawerOpenEdge, { width: Math.min(windowWidth * 0.1, DRAWER_OPEN_EDGE_WIDTH) }]}
+                {...chatOpenDrawerPanResponder.panHandlers}
+              />
+            )}
+            <View style={styles.chatScrollWrap}>
+              <ScrollView
+                ref={scrollRef}
+                style={styles.chatScroll}
+                contentContainerStyle={styles.chatContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                nestedScrollEnabled
+                onScroll={handleChatScroll}
+                scrollEventThrottle={80}
+                onContentSizeChange={scheduleStreamingScroll}
+              >
+                {activeConversation ? (
+                  activeConversation.messages.length > 0 ? (
+                    activeConversation.messages.map((message) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        language={uiLanguage}
+                        colorScheme={theme.scheme}
+                        isStreaming={sending && message.id === streamingMessageIdRef.current}
+                        onRegenerate={handleRegenerateMessage}
+                        onEditUserMessage={editUserMessage}
+                        onSwitchVariant={switchUserMessageVariant}
+                      />
+                    ))
+                  ) : (
+                    <View style={styles.emptyStateCard}>
+                      <Text style={[styles.emptyStateTitle, { color: theme.text }]}>{activeConversation.title}</Text>
+                      <Text style={[styles.emptyStateText, { color: theme.muted }]}>{copy.emptyStateBody}</Text>
+                    </View>
+                  )
                 ) : (
                   <View style={styles.emptyStateCard}>
-                    <Text style={[styles.emptyStateTitle, { color: theme.text }]}>{activeConversation.title}</Text>
-                    <Text style={[styles.emptyStateText, { color: theme.muted }]}>{copy.emptyStateBody}</Text>
+                    <Text style={[styles.emptyStateTitle, { color: theme.text }]}>{copy.noActiveSessionTitle}</Text>
+                    <Text style={[styles.emptyStateText, { color: theme.muted }]}>{copy.noActiveSessionBody}</Text>
                   </View>
-                )
-              ) : (
-                <View style={styles.emptyStateCard}>
-                  <Text style={[styles.emptyStateTitle, { color: theme.text }]}>{copy.noActiveSessionTitle}</Text>
-                  <Text style={[styles.emptyStateText, { color: theme.muted }]}>{copy.noActiveSessionBody}</Text>
-                </View>
-              )}
+                )}
 
-            </ScrollView>
+              </ScrollView>
+            </View>
 
             <Animated.View
               ref={composerDockRef}
@@ -2852,6 +2973,7 @@ export default function App() {
               </SlideFadePresence>
             </Animated.View>
           </View>
+          </DrawerGestureContext.Provider>
         </KeyboardAvoidingView>
       </SafeAreaView>
       </Animated.View>
@@ -2951,142 +3073,180 @@ export default function App() {
                       {draftProfile.model}
                     </Text>
                   </View>
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.profileLabel}</Text>
-                  <TextInput
-                    value={draftProfile.label}
-                    onChangeText={(value) => setDraftProfile((current) => ({ ...current, label: value }))}
-                    style={[styles.fieldInput, themedFieldInput]}
-                    placeholder="My API"
-                    placeholderTextColor={theme.placeholder}
-                  />
+                  <View style={[styles.settingsGroupCard, themedPanel]}>
+                    <Text style={[styles.settingsGroupTitle, { color: theme.text }]}>{copy.basicApiSettings}</Text>
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.profileLabel}</Text>
+                    <TextInput
+                      value={draftProfile.label}
+                      onChangeText={(value) => setDraftProfile((current) => ({ ...current, label: value }))}
+                      style={[styles.fieldInput, themedFieldInput]}
+                      placeholder="My API"
+                      placeholderTextColor={theme.placeholder}
+                    />
 
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.apiPreset}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                    {API_PRESETS.map((preset) => {
-                      const selected =
-                        draftProfile.apiProtocol === preset.apiProtocol &&
-                        draftProfile.baseUrl === preset.baseUrl &&
-                        draftProfile.model === preset.model;
-                      return (
-                        <Pressable
-                          key={preset.id}
-                          style={[styles.suggestionChip, themedPanel, selected && [styles.selectedChip, themedSelected]]}
-                          onPress={() => updateDraftProfileWithReasoningReset((current) => applyApiPreset(current, preset))}
-                        >
-                          <Text style={[styles.suggestionChipText, themedSubtleText, selected && { color: theme.primary }]}>
-                            {preset.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.apiPreset}</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
+                      {API_PRESETS.map((preset) => {
+                        const selected =
+                          draftProfile.apiProtocol === preset.apiProtocol &&
+                          draftProfile.baseUrl === preset.baseUrl &&
+                          draftProfile.model === preset.model;
+                        return (
+                          <Pressable
+                            key={preset.id}
+                            style={[styles.suggestionChip, themedPanel, selected && [styles.selectedChip, themedSelected]]}
+                            onPress={() => updateDraftProfileWithReasoningReset((current) => applyApiPreset(current, preset))}
+                          >
+                            <Text style={[styles.suggestionChipText, themedSubtleText, selected && { color: theme.primary }]}>
+                              {preset.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
 
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.endpointMode}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                    {API_PROTOCOL_OPTIONS.map((protocol) => (
+                  <View style={[styles.settingsGroupCard, themedPanel]}>
+                    <View style={styles.settingsGroupHeader}>
+                      <Text style={[styles.settingsGroupTitle, { color: theme.text }]}>{copy.connectionSettings}</Text>
+                      <Text style={[styles.settingsGroupMeta, themedMutedText]} numberOfLines={1}>
+                        {apiProtocolLabel(draftProfile.apiProtocol, uiLanguage)}
+                      </Text>
+                    </View>
+                    <View style={styles.profileUtilityRow}>
                       <Pressable
-                        key={protocol}
-                        style={[styles.suggestionChip, themedPanel, draftProfile.apiProtocol === protocol && [styles.selectedChip, themedSelected]]}
-                        onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, apiProtocol: protocol }))}
+                        style={[styles.secondaryActionCard, themedPanel, testingProfile && styles.disabledAction]}
+                        onPress={handleTestApiProfile}
+                        disabled={testingProfile || savingProfile}
                       >
-                        <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.apiProtocol === protocol && { color: theme.primary }]}>
-                          {apiProtocolLabel(protocol, uiLanguage)}
+                        <Text style={[styles.secondaryActionLabel, { color: theme.text }]}>
+                          {testingProfile ? copy.testingApiConnection : copy.testApiConnection}
                         </Text>
                       </Pressable>
-                    ))}
-                  </ScrollView>
-                  <Text style={[styles.inlineHint, themedMutedText]}>{getEndpointHint(draftProfile.apiProtocol, uiLanguage)}</Text>
-
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.baseUrl}</Text>
-                  <TextInput
-                    value={draftProfile.baseUrl}
-                    onChangeText={(value) => setDraftProfile((current) => ({ ...current, baseUrl: value }))}
-                    style={[styles.fieldInput, themedFieldInput]}
-                    autoCapitalize="none"
-                    placeholder="https://api.openai.com/v1"
-                    placeholderTextColor={theme.placeholder}
-                  />
-                  <Text style={[styles.inlineHint, themedMutedText]}>{copy.baseUrlHint}</Text>
-                  {usingInsecureHttp && <Text style={styles.warningText}>{copy.insecureHttpWarning}</Text>}
-
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.apiKey}</Text>
-                  <TextInput
-                    value={apiKey}
-                    onChangeText={setApiKey}
-                    style={[styles.fieldInput, themedFieldInput]}
-                    autoCapitalize="none"
-                    secureTextEntry
-                    placeholder="sk-..."
-                    placeholderTextColor={theme.placeholder}
-                  />
-
-                  <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.model}</Text>
-                  <TextInput
-                    value={draftProfile.model}
-                    onChangeText={(value) => updateDraftProfileWithReasoningReset((current) => ({ ...current, model: value }))}
-                    style={[styles.fieldInput, themedFieldInput]}
-                    autoCapitalize="none"
-                    placeholder="gpt-5.4"
-                    placeholderTextColor={theme.placeholder}
-                  />
-                  <Pressable
-                    style={[styles.inlineUtilityButton, themedPanel, fetchingModels && styles.disabledAction]}
-                    onPress={() => {
-                      void fetchModelsForDraftProfile();
-                    }}
-                    disabled={fetchingModels}
-                  >
-                    <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>
-                      {fetchingModels ? copy.fetchingModels : copy.fetchModels}
-                    </Text>
-                  </Pressable>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                    {uniqueStrings([draftProfile.model, ...(draftProfile.cachedModels ?? []), ...availableModels, ...MODEL_SUGGESTIONS]).map((model) => (
                       <Pressable
-                        key={model}
-                        style={[styles.suggestionChip, themedPanel, draftProfile.model === model && [styles.selectedChip, themedSelected]]}
-                        onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, model }))}
+                        style={styles.dangerButtonCompact}
+                        onPress={() => confirmDeleteApiProfile(draftProfile.id)}
+                        disabled={testingProfile || savingProfile}
                       >
-                        <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.model === model && { color: theme.primary }]}>
-                          {model}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                  <Text style={[styles.inlineHint, themedMutedText]}>{getModelHint(draftProfile.model, uiLanguage)}</Text>
-
-                  <View style={[styles.compactSettingCard, themedPanel]}>
-                    <View style={styles.compactSettingHeader}>
-                      <View style={styles.compactSettingTitleWrap}>
-                        <Text style={[styles.compactSettingTitle, { color: theme.text }]}>{copy.reasoningEffort}</Text>
-                        <Text style={[styles.compactSettingSubtitle, themedMutedText]}>
-                          {copy.currentValue}: {draftProfile.reasoningEffort}
-                        </Text>
-                      </View>
-                      <Pressable style={[styles.inlineUtilityButton, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => refreshReasoningEffortOptions(draftProfile)}>
-                        <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>{copy.fetchReasoningEfforts}</Text>
+                        <Text style={styles.dangerButtonText}>{copy.deleteApiProfile}</Text>
                       </Pressable>
                     </View>
+
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.endpointMode}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-                      {reasoningEffortOptions.map((effort) => (
+                      {API_PROTOCOL_OPTIONS.map((protocol) => (
                         <Pressable
-                          key={effort}
-                          style={[styles.suggestionChip, { backgroundColor: theme.surface, borderColor: theme.border }, draftProfile.reasoningEffort === effort && [styles.selectedChip, themedSelected]]}
-                          onPress={() => applyReasoningEffort(effort)}
+                          key={protocol}
+                          style={[styles.suggestionChip, themedPanel, draftProfile.apiProtocol === protocol && [styles.selectedChip, themedSelected]]}
+                          onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, apiProtocol: protocol }))}
                         >
-                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.reasoningEffort === effort && { color: theme.primary }]}>
-                            {effort}
+                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.apiProtocol === protocol && { color: theme.primary }]}>
+                            {apiProtocolLabel(protocol, uiLanguage)}
                           </Text>
                         </Pressable>
                       ))}
                     </ScrollView>
-                    <Text style={[styles.inlineHint, themedMutedText]}>
-                      {reasoningEffortsFetched
-                        ? inferReasoningEffortOptions(draftProfile).length > 1
-                          ? copy.reasoningEffortsReady
-                          : copy.reasoningEffortsUnavailable
-                        : getReasoningEffortHint(draftProfile.model, draftProfile.reasoningEffort, uiLanguage)}
-                    </Text>
+                    <Text style={[styles.inlineHint, themedMutedText]}>{getEndpointHint(draftProfile.apiProtocol, uiLanguage)}</Text>
+
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.baseUrl}</Text>
+                    <TextInput
+                      value={draftProfile.baseUrl}
+                      onChangeText={(value) => setDraftProfile((current) => ({ ...current, baseUrl: value }))}
+                      style={[styles.fieldInput, themedFieldInput]}
+                      autoCapitalize="none"
+                      placeholder="https://api.openai.com/v1"
+                      placeholderTextColor={theme.placeholder}
+                    />
+                    <Text style={[styles.inlineHint, themedMutedText]}>{copy.baseUrlHint}</Text>
+                    {usingInsecureHttp && <Text style={styles.warningText}>{copy.insecureHttpWarning}</Text>}
+
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.apiKey}</Text>
+                    <TextInput
+                      value={apiKey}
+                      onChangeText={setApiKey}
+                      style={[styles.fieldInput, themedFieldInput]}
+                      autoCapitalize="none"
+                      secureTextEntry
+                      placeholder="sk-..."
+                      placeholderTextColor={theme.placeholder}
+                    />
+                  </View>
+
+                  <View style={[styles.settingsGroupCard, themedPanel]}>
+                    <View style={styles.settingsGroupHeader}>
+                      <Text style={[styles.settingsGroupTitle, { color: theme.text }]}>{copy.modelAndReasoning}</Text>
+                      <Text style={[styles.settingsGroupMeta, themedMutedText]} numberOfLines={1}>
+                        {draftProfile.model}
+                      </Text>
+                    </View>
+                    <Text style={[styles.fieldLabel, themedSubtleText]}>{copy.model}</Text>
+                    <TextInput
+                      value={draftProfile.model}
+                      onChangeText={(value) => updateDraftProfileWithReasoningReset((current) => ({ ...current, model: value }))}
+                      style={[styles.fieldInput, themedFieldInput]}
+                      autoCapitalize="none"
+                      placeholder="gpt-5.4"
+                      placeholderTextColor={theme.placeholder}
+                    />
+                    <Pressable
+                      style={[styles.inlineUtilityButton, themedPanel, fetchingModels && styles.disabledAction]}
+                      onPress={() => {
+                        void fetchModelsForDraftProfile();
+                      }}
+                      disabled={fetchingModels}
+                    >
+                      <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>
+                        {fetchingModels ? copy.fetchingModels : copy.fetchModels}
+                      </Text>
+                    </Pressable>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
+                      {uniqueStrings([draftProfile.model, ...(draftProfile.cachedModels ?? []), ...availableModels, ...MODEL_SUGGESTIONS]).map((model) => (
+                        <Pressable
+                          key={model}
+                          style={[styles.suggestionChip, themedPanel, draftProfile.model === model && [styles.selectedChip, themedSelected]]}
+                          onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, model }))}
+                        >
+                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.model === model && { color: theme.primary }]}>
+                            {model}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    <Text style={[styles.inlineHint, themedMutedText]}>{getModelHint(draftProfile.model, uiLanguage)}</Text>
+
+                    <View style={[styles.compactSettingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <View style={styles.compactSettingHeader}>
+                        <View style={styles.compactSettingTitleWrap}>
+                          <Text style={[styles.compactSettingTitle, { color: theme.text }]}>{copy.reasoningEffort}</Text>
+                          <Text style={[styles.compactSettingSubtitle, themedMutedText]}>
+                            {copy.currentValue}: {draftProfile.reasoningEffort}
+                          </Text>
+                        </View>
+                        <Pressable style={[styles.inlineUtilityButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]} onPress={() => refreshReasoningEffortOptions(draftProfile)}>
+                          <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>{copy.fetchReasoningEfforts}</Text>
+                        </Pressable>
+                      </View>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
+                        {reasoningEffortOptions.map((effort) => (
+                          <Pressable
+                            key={effort}
+                            style={[styles.suggestionChip, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, draftProfile.reasoningEffort === effort && [styles.selectedChip, themedSelected]]}
+                            onPress={() => applyReasoningEffort(effort)}
+                          >
+                            <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.reasoningEffort === effort && { color: theme.primary }]}>
+                              {effort}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                      <Text style={[styles.inlineHint, themedMutedText]}>
+                        {reasoningEffortsFetched
+                          ? inferReasoningEffortOptions(draftProfile).length > 1
+                            ? copy.reasoningEffortsReady
+                            : copy.reasoningEffortsUnavailable
+                          : getReasoningEffortHint(draftProfile.model, draftProfile.reasoningEffort, uiLanguage)}
+                      </Text>
+                    </View>
                   </View>
 
                   <Pressable
@@ -3158,35 +3318,6 @@ export default function App() {
                       />
                       <Text style={[styles.inlineHint, themedMutedText]}>{copy.advancedConfigHint}</Text>
                   </SlideFadePresence>
-
-                  <View style={styles.profileUtilityRow}>
-                    <Pressable
-                      style={[styles.secondaryActionCard, themedPanel, testingProfile && styles.disabledAction]}
-                      onPress={handleTestApiProfile}
-                      disabled={testingProfile || savingProfile}
-                    >
-                      <Text style={[styles.secondaryActionLabel, { color: theme.text }]}>
-                        {testingProfile ? copy.testingApiConnection : copy.testApiConnection}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.dangerButtonCompact}
-                      onPress={() => confirmDeleteApiProfile(draftProfile.id)}
-                      disabled={testingProfile || savingProfile}
-                    >
-                      <Text style={styles.dangerButtonText}>{copy.deleteApiProfile}</Text>
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <Pressable
-                      style={[styles.modalPrimary, savingProfile && styles.disabledAction]}
-                      onPress={handleSaveApiProfile}
-                      disabled={savingProfile}
-                    >
-                      <Text style={styles.modalPrimaryText}>{savingProfile ? copy.saving : copy.done}</Text>
-                    </Pressable>
-                  </View>
                 </>
               )}
 
@@ -3322,6 +3453,31 @@ export default function App() {
                 <Text style={styles.modalPrimaryText}>{fetchingModels ? copy.fetchingModels : copy.fetchModels}</Text>
               </Pressable>
             </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileChipRow}>
+              {persisted.profiles.map((profile) => {
+                const active = profile.id === persisted.activeProfileId;
+                return (
+                  <Pressable
+                    key={profile.id}
+                    style={[
+                      styles.profileChip,
+                      themedPanel,
+                      active && [styles.profileChipSelected, themedSelected],
+                    ]}
+                    onPress={() => {
+                      void switchActiveApiProfile(profile.id);
+                    }}
+                  >
+                    <Text style={[styles.profileChipTitle, { color: theme.text }, active && { color: theme.primary }]}>
+                      {profile.label}
+                    </Text>
+                    <Text style={[styles.profileChipMeta, { color: theme.muted }, active && { color: theme.primary }]} numberOfLines={1}>
+                      {active ? copy.activeApiProfile : profile.model}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <FlatList
               style={styles.modalScroll}
               contentContainerStyle={styles.modelListContent}
@@ -3743,6 +3899,18 @@ const styles = StyleSheet.create({
   },
   chatShell: {
     flex: 1,
+  },
+  drawerOpenEdge: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 3,
+    backgroundColor: 'transparent',
+  },
+  chatScrollWrap: {
+    flex: 1,
+    position: 'relative',
   },
   chatScroll: {
     flex: 1,
@@ -4386,14 +4554,14 @@ const styles = StyleSheet.create({
   drawerSessionTitle: {
     flex: 1,
     color: '#111827',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
-  drawerSessionTime: {
+  drawerSessionSubtitle: {
     color: '#6B7280',
     fontSize: 12,
     fontWeight: '700',
-    flexShrink: 0,
+    marginTop: 6,
   },  sessionSelectMark: {
     width: 24,
     height: 24,
@@ -4617,6 +4785,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     marginTop: 5,
+  },  settingsGroupCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D8E0EA',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 14,
+  },  settingsGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 2,
+  },  settingsGroupTitle: {
+    flex: 1,
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '800',
+  },  settingsGroupMeta: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700',
   },  formSectionHeader: {
     minHeight: 32,
     flexDirection: 'row',
@@ -4827,7 +5018,8 @@ const styles = StyleSheet.create({
   profileUtilityRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 16,
+    marginTop: 10,
+    marginBottom: 6,
   },
   dangerButtonText: {
     color: '#B91C1C',
@@ -4889,6 +5081,7 @@ const styles = StyleSheet.create({
   },
   sessionMeta: {
     flex: 1,
+    minWidth: 0,
   },  sessionSubtitle: {
     color: '#64748B',
     fontSize: 12,
