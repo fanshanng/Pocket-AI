@@ -58,6 +58,7 @@ import {
 } from './src/components/AppIcons';
 import { DrawerGestureContext } from './src/components/DrawerGestureContext';
 import { MessageBubble } from './src/components/MessageBubble';
+import { ModelPickerContent } from './src/components/ModelPickerContent';
 import { PendingAttachmentBar } from './src/components/PendingAttachmentBar';
 import { SlideFadePresence } from './src/components/SlideFadePresence';
 import { COPY } from './src/i18n/copy';
@@ -1979,25 +1980,6 @@ export default function App() {
     });
   }
 
-  function renderModelOption({ item: model }: { item: string }) {
-    const active = activeProfile.model === model;
-    return (
-      <Pressable
-        style={[
-          styles.modelOption,
-          { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
-          active && [styles.modelOptionSelected, themedSelected],
-        ]}
-        onPress={() => applyModelToActiveProfile(model)}
-      >
-        <Text style={[styles.modelOptionText, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
-          {model}
-        </Text>
-        {active && <Text style={[styles.modelOptionState, themedSelectedText]} numberOfLines={1}>{copy.activeModel}</Text>}
-      </Pressable>
-    );
-  }
-
   function flushStreamingText() {
     const conversationId = streamingConversationIdRef.current;
     const messageId = streamingMessageIdRef.current;
@@ -3685,76 +3667,32 @@ export default function App() {
               },
             ]}
           >
-            <View style={styles.modelPickerHeader}>
-              <View style={[styles.modalHeading, styles.modelPickerHeading]}>
-                <Text style={[styles.modalTitle, styles.modelPickerTitle, { color: theme.text }]} numberOfLines={1}>
-                  {copy.modelPickerTitle}
-                </Text>
-              </View>
-              <Pressable
-                style={[styles.modalPrimarySmall, styles.modelFetchButton, fetchingModels && styles.disabledAction]}
-                onPress={() => {
-                  void fetchModelsForProfile(activeProfile, apiKey);
-                }}
-                disabled={fetchingModels}
-              >
-                <RefreshCw size={15} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={[styles.modalPrimaryText, styles.modelFetchButtonText]} numberOfLines={1}>
-                  {fetchingModels ? copy.fetchingModels : copy.fetchModels}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={styles.modelProfileRail}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.modelProfileScroll}
-                contentContainerStyle={[styles.profileChipRow, styles.modelProfileChipRow]}
-              >
-                {persisted.profiles.map((profile) => {
-                  const active = profile.id === persisted.activeProfileId;
-                  return (
-                    <Pressable
-                      key={profile.id}
-                      style={[
-                        styles.profileChip,
-                        styles.modelProfileChip,
-                        themedPanel,
-                        active && [styles.profileChipSelected, themedSelected],
-                      ]}
-                      onPress={() => {
-                        void switchActiveApiProfile(profile.id);
-                      }}
-                      onLongPress={() => {
-                        triggerLongPressHaptic();
-                        void openApiProfileEditorFromPicker(profile);
-                      }}
-                    >
-                      <Text style={[styles.profileChipTitle, styles.modelProfileChipTitle, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
-                        {profile.label}
-                      </Text>
-                      <Text style={[styles.profileChipMeta, styles.modelProfileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
-                        {active ? copy.activeApiProfile : profile.model}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-            <FlatList
-              style={styles.modelList}
-              contentContainerStyle={styles.modelListContent}
-              data={availableModels}
-              keyExtractor={(model) => model}
-              renderItem={renderModelOption}
-              keyboardShouldPersistTaps="handled"
-              initialNumToRender={10}
-              maxToRenderPerBatch={8}
-              windowSize={5}
-              removeClippedSubviews={Platform.OS === 'android'}
-              ListEmptyComponent={
-                <Text style={[styles.emptySessionText, { color: theme.muted }]}>{copy.modelsEmpty}</Text>
-              }
+            <ModelPickerContent
+              profiles={persisted.profiles}
+              activeProfileId={persisted.activeProfileId}
+              activeModel={activeProfile.model}
+              availableModels={availableModels}
+              fetchingModels={fetchingModels}
+              theme={theme}
+              copy={{
+                title: copy.modelPickerTitle,
+                fetchModels: copy.fetchModels,
+                fetchingModels: copy.fetchingModels,
+                activeApiProfile: copy.activeApiProfile,
+                activeModel: copy.activeModel,
+                modelsEmpty: copy.modelsEmpty,
+              }}
+              onFetchModels={() => {
+                void fetchModelsForProfile(activeProfile, apiKey);
+              }}
+              onSelectProfile={(profileId) => {
+                void switchActiveApiProfile(profileId);
+              }}
+              onLongPressProfile={(profile) => {
+                triggerLongPressHaptic();
+                void openApiProfileEditorFromPicker(profile);
+              }}
+              onSelectModel={applyModelToActiveProfile}
             />
           </Animated.View>
         </View>
@@ -4710,13 +4648,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 12,
   },
-  modelPickerHeading: {
-    minWidth: 0,
-    paddingRight: 0,
-  },
-  modelPickerTitle: {
-    flexShrink: 1,
-  },
   modalSubtitle: {
     color: '#64748B',
     marginTop: 8,
@@ -5022,44 +4953,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
   },
-  modelListContent: {
-    paddingTop: 0,
-    paddingBottom: 10,
-  },
-  modelList: {
-    flex: 1,
-    minHeight: 0,
-  },
-  modelOption: {
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D8E0EA',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  modelOptionSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
-  },
-  modelOptionText: {
-    flex: 1,
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '800',
-    minWidth: 0,
-  },
-  modelOptionState: {
-    flexShrink: 0,
-    color: '#1D4ED8',
-    fontSize: 12,
-    fontWeight: '800',
-  },  renameInput: {
+  renameInput: {
     marginTop: 16,
   },
   renameCard: {
@@ -5229,30 +5123,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  modelProfileChip: {
-    minWidth: 126,
-    maxWidth: 158,
-    minHeight: 54,
-    borderRadius: 14,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    justifyContent: 'center',
-  },
-  modelProfileChipRow: {
-    paddingTop: 12,
-    paddingRight: 2,
-    paddingBottom: 10,
-    alignItems: 'stretch',
-  },
-  modelProfileRail: {
-    flexShrink: 0,
-    minHeight: 76,
-    marginBottom: 10,
-    zIndex: 1,
-  },
-  modelProfileScroll: {
-    flexGrow: 0,
-  },
   profileChipSelected: {
     borderColor: '#60A5FA',
     backgroundColor: '#EFF6FF',
@@ -5262,18 +5132,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  modelProfileChipTitle: {
-    minWidth: 0,
-  },  profileChipMeta: {
+  profileChipMeta: {
     color: '#64748B',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 5,
   },
-  modelProfileChipMeta: {
-    minWidth: 0,
-    marginTop: 4,
-  },  settingsGroupCard: {
+  settingsGroupCard: {
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#D8E0EA',
@@ -5546,37 +5411,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modelFetchButton: {
-    minHeight: 42,
-    minWidth: 136,
-    maxWidth: 174,
-    borderRadius: 999,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    flexShrink: 0,
-    flexDirection: 'row',
-    gap: 7,
-  },
   modalPrimaryText: {
     color: '#FFFFFF',
     fontWeight: '800',
-  },
-  modelFetchButtonText: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 13,
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  modelPickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 4,
   },
   emptySessionText: {
     color: '#64748B',

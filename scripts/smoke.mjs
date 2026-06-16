@@ -21,6 +21,7 @@ const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
 const messageBubble = read('src/components/MessageBubble.tsx');
 const codeBlock = read('src/components/CodeBlock.tsx');
 const pendingAttachmentBar = read('src/components/PendingAttachmentBar.tsx');
+const modelPickerContent = read('src/components/ModelPickerContent.tsx');
 const conversations = read('src/lib/conversations.ts');
 const drawerGestures = read('src/lib/drawerGestures.ts');
 const openai = read('src/lib/openai.ts');
@@ -177,6 +178,11 @@ check(!app.includes('attachmentPreviewDelete') && !app.includes('attachmentPrevi
 check(app.includes('<PendingAttachmentBar'), 'Pending attachment rail should be rendered through PendingAttachmentBar');
 check(pendingAttachmentBar.includes('styles.thumb'), 'Pending image attachment thumbnail missing');
 check(pendingAttachmentBar.includes('formatMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
+check(app.includes('<ModelPickerContent'), 'Model picker should be rendered through ModelPickerContent');
+check(modelPickerContent.includes('onFetchModels'), 'Model picker fetch action missing');
+check(modelPickerContent.includes('onLongPressProfile'), 'Model picker profile long-press editor action missing');
+check(modelPickerContent.includes('onSelectModel(model)'), 'Model picker model selection action missing');
+check(modelPickerContent.includes("removeClippedSubviews={Platform.OS === 'android'}"), 'Model picker Android list clipping guard missing');
 check(app.includes('composerLayoutLift'), 'Android composer layout lift missing');
 check(app.includes("Platform.OS === 'android' ? composerLayoutLift : 0"), 'Android composer lift should use layout margin for correct tap targets');
 
