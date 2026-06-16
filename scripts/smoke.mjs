@@ -133,6 +133,7 @@ for (const sourceGuard of [
   'math_block',
   'BlockMathView',
   'HorizontalScrollable',
+  'EagerHorizontalScrollable',
   'getEstimatedTableWidth',
   'tableCellText',
 ]) {
@@ -152,12 +153,12 @@ check(
   'Markdown table rule should preserve horizontal scroll with estimated width'
 );
 check(
-  /function BlockMathView[\s\S]*<HorizontalScrollable[\s\S]*contentWidth=\{resolvedWidth\}/.test(markdownRenderer),
-  'Markdown formula blocks should use table-style horizontal scroll so vertical message scrolling still works'
+  /function BlockMathView[\s\S]*<EagerHorizontalScrollable[\s\S]*contentWidth=\{resolvedWidth\}/.test(markdownRenderer),
+  'Markdown formula blocks should preserve the v1.2.23 eager horizontal scroll behavior'
 );
 check(
-  !markdownRenderer.includes('shouldActivateOnStart') && !markdownRenderer.includes('onTouchStart={beginLock}'),
-  'Markdown formula horizontal scroll should not eagerly capture vertical drags'
+  markdownRenderer.includes('shouldActivateOnStart') && markdownRenderer.includes('onTouchStart={beginLock}'),
+  'Markdown formula horizontal scroll should keep the guarded eager capture used by v1.2.23'
 );
 check(
   messageBubble.includes('onHorizontalGestureStart={lockDrawerGesture}') &&
