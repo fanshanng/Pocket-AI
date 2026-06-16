@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.2.27`.
+Current version: `v1.3.0`.
 
 ## Refactor Rules
 
@@ -116,5 +116,5 @@ Prefer explicit import/export boundaries:
 - `v1.2.25`: Reverted the v1.2.24 formula scroll experiment and restored the v1.2.23 eager formula horizontal-scroll behavior.
 - `v1.2.26`: Replaced the eager formula gesture wrapper with a formula-only directional drag layer so horizontal formula panning does not deliberately capture vertical message-list drags.
 - `v1.2.27`: Reverted the v1.2.26 directional formula drag experiment after device testing showed vertical drags were still captured; keep the v1.2.25 formula horizontal-scroll behavior until a lower-risk gesture prototype is available.
-- `v1.3.0`: Publish the latest stable 1.2-series build as the next public minor release.
+- `v1.3.0`: Publish the latest v1.2.27 stable behavior as the next public minor release, without runtime behavior changes.
 - `v1.3.x`: Add network search profile settings behind provider capability checks.
