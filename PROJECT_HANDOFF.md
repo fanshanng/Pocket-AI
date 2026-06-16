@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.23` / Android `versionCode 58`.
+- Current version: `1.2.24` / Android `versionCode 59`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -75,6 +75,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.21 extracts editable API profile draft helpers into `src/lib/profileDrafts.ts` so Base URL draft behavior is guarded outside `App.tsx`; UI and request behavior are unchanged.
 - v1.2.22 adds provider capability metadata and default inference in `src/lib/providerCapabilities.ts` as a foundation for future per-profile features such as web search; request behavior and UI are unchanged.
 - v1.2.23 adds a release audit script and final 1.2-series publishing checks for version consistency, release notes completeness, README cleanliness, and forbidden upload files; runtime behavior is unchanged.
+- v1.2.24 changes block formulas to use the same horizontal-scroll gesture strategy as tables, so vertical drags over formulas can continue scrolling the message list.
 
 ## Key Files
 
@@ -224,7 +225,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.23 APK SHA-256:
+Current v1.2.24 APK SHA-256:
+
+```text
+D564858352D2C1692AFEC5DCC30868ADD6293D44B5AE21654C56D1B50FC37799
+```
+
+Previous v1.2.23 APK SHA-256:
 
 ```text
 7F0F5366593612BBECD745F82887D010545A6D7F49B2A93BDB50AE206E336E6D

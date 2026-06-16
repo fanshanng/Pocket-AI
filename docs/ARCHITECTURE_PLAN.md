@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.2.23`.
+Current version: `v1.2.24`.
 
 ## Refactor Rules
 
@@ -112,5 +112,6 @@ Prefer explicit import/export boundaries:
 - `v1.2.21`: Extracted editable API profile draft helpers for Base URL draft validation and sanitization.
 - `v1.2.22`: Added provider capability types and default capability inference without changing requests.
 - `v1.2.23`: Added final 1.2-series release audit checks for version records, README shape, forbidden upload files, and publishing readiness.
+- `v1.2.24`: Aligned formula-block horizontal scrolling with the table scroll strategy so formulas no longer eagerly capture vertical message-list drags.
 - `v1.3.0`: Publish the latest stable 1.2-series build as the next public minor release.
 - `v1.3.x`: Add network search profile settings behind provider capability checks.

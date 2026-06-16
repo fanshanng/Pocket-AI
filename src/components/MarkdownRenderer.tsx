@@ -666,64 +666,6 @@ function getEstimatedTableWidth(children: ReactNode): number {
   return Math.min(TABLE_MAX_ESTIMATED_WIDTH, Math.max(320, columnCount * TABLE_MIN_COLUMN_WIDTH));
 }
 
-function EagerHorizontalScrollable({
-  children,
-  style,
-  contentContainerStyle,
-  contentWidth,
-  onHorizontalGestureStart,
-  onHorizontalGestureEnd,
-}: HorizontalScrollableProps) {
-  const lockedRef = useRef(false);
-  const forcedContentWidth =
-    typeof contentWidth === 'number' && Number.isFinite(contentWidth)
-      ? Math.max(1, Math.ceil(contentWidth))
-      : undefined;
-
-  const beginLock = useCallback(() => {
-    if (lockedRef.current) return;
-    lockedRef.current = true;
-    onHorizontalGestureStart?.();
-  }, [onHorizontalGestureStart]);
-
-  const endLock = useCallback(() => {
-    if (!lockedRef.current) return;
-    lockedRef.current = false;
-    onHorizontalGestureEnd?.();
-  }, [onHorizontalGestureEnd]);
-
-  useEffect(() => () => endLock(), [endLock]);
-
-  return (
-    <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        directionalLockEnabled
-        alwaysBounceVertical={false}
-        showsHorizontalScrollIndicator
-        style={[style, localStyles.scrollViewport]}
-        contentContainerStyle={[
-          contentContainerStyle,
-          localStyles.eagerScrollContent,
-          forcedContentWidth
-            ? { width: forcedContentWidth, minWidth: forcedContentWidth }
-            : undefined,
-        ]}
-        onTouchStart={beginLock}
-        onTouchEnd={endLock}
-        onTouchCancel={endLock}
-        onScrollBeginDrag={beginLock}
-        onMomentumScrollBegin={beginLock}
-        onScrollEndDrag={endLock}
-        onMomentumScrollEnd={endLock}
-      >
-        {children}
-      </ScrollView>
-    </NativeViewGestureHandler>
-  );
-}
-
 function BlockMathView({
   math,
   colorScheme = 'light',
@@ -768,7 +710,7 @@ function BlockMathView({
   }
 
   return (
-    <EagerHorizontalScrollable
+    <HorizontalScrollable
       style={dynamicStyles.mathBlockWrap}
       contentContainerStyle={dynamicStyles.mathBlockScrollContent}
       contentWidth={resolvedWidth}
@@ -803,7 +745,7 @@ function BlockMathView({
           onMessage={handleMessage}
         />
       </View>
-    </EagerHorizontalScrollable>
+    </HorizontalScrollable>
   );
 }
 
@@ -984,11 +926,6 @@ const localStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   scrollContent: {
-    alignSelf: 'flex-start',
-    flexGrow: 0,
-  },
-  eagerScrollContent: {
-    alignItems: 'flex-start',
     alignSelf: 'flex-start',
     flexGrow: 0,
   },
