@@ -1609,10 +1609,19 @@ export default function App() {
     }
   }
 
-  async function persistDraftApiProfile(options: { refetchModels?: boolean; profile?: ApiProfile; key?: string } = {}) {
+  async function persistDraftApiProfile(options: { refetchModels?: boolean; profile?: ApiProfile; key?: string; requireBaseUrl?: boolean } = {}) {
+    const draft = options.profile ?? draftProfileRef.current;
+    if (!draft.baseUrl.trim()) {
+      // Let users clear a preset URL before pasting a replacement; saved profiles and network actions still require a URL.
+      if (options.requireBaseUrl) {
+        Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
+      }
+      return undefined;
+    }
+
     const requestId = profileSaveRequestIdRef.current + 1;
     profileSaveRequestIdRef.current = requestId;
-    let profile = sanitizeProfile(options.profile ?? draftProfileRef.current);
+    let profile = sanitizeProfile(draft);
     setSavingProfile(true);
     try {
       const key = (options.key ?? apiKeyRef.current).trim();
@@ -1663,7 +1672,7 @@ export default function App() {
   }
 
   async function handleSaveApiProfile() {
-    const savedProfile = await persistDraftApiProfile({ refetchModels: true });
+    const savedProfile = await persistDraftApiProfile({ refetchModels: true, requireBaseUrl: true });
     if (!savedProfile) {
       return;
     }
@@ -1710,9 +1719,11 @@ export default function App() {
   function updateDraftProfileWithReasoningReset(updater: (current: ApiProfile) => ApiProfile) {
     setReasoningEffortsFetched(false);
     setDraftProfile((current) => {
-      const next = sanitizeProfile(updater(current));
+      const updated = updater(current);
+      const next = sanitizeProfile(updated);
       return {
         ...next,
+        baseUrl: updated.baseUrl.trim() ? next.baseUrl : updated.baseUrl,
         cachedModels: getCachedModelsForProfile(next),
         cachedReasoningEfforts: getCachedReasoningEffortsForProfile(next),
       };
@@ -1779,6 +1790,11 @@ export default function App() {
   }
 
   async function handleTestApiProfile() {
+    if (!draftProfile.baseUrl.trim()) {
+      Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
+      return;
+    }
+
     const profile = sanitizeProfile(draftProfile);
     const key = apiKey.trim();
     if (!key) {
@@ -1875,6 +1891,11 @@ export default function App() {
   }
 
   async function fetchModelsForProfile(profile: ApiProfile = activeProfile, key = apiKey) {
+    if (!profile.baseUrl.trim()) {
+      Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
+      return;
+    }
+
     if (!key.trim()) {
       openSettings();
       Alert.alert(copy.apiKeyRequiredTitle, copy.apiKeyRequiredMessage);
@@ -1907,6 +1928,11 @@ export default function App() {
   }
 
   async function fetchModelsForDraftProfile() {
+    if (!draftProfile.baseUrl.trim()) {
+      Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
+      return;
+    }
+
     const profile = sanitizeProfile(draftProfile);
     const key = apiKey.trim();
     if (!key) {

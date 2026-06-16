@@ -71,6 +71,8 @@ export type LanguageCopy = {
   endpointMode: string;
   baseUrl: string;
   baseUrlHint: string;
+  baseUrlRequiredTitle: string;
+  baseUrlRequiredMessage: string;
   advancedConfigHint: string;
   insecureHttpWarning: string;
   apiKey: string;
@@ -222,6 +224,8 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     endpointMode: '接口类型',
     baseUrl: 'Base URL',
     baseUrlHint: '这里只填 API 根地址，接口类型会决定自动拼接 `/responses` 或 `/chat/completions`。',
+    baseUrlRequiredTitle: '需要 Base URL',
+    baseUrlRequiredMessage: '请先填写 API 根地址，例如 `https://api.openai.com/v1` 或 `https://api.deepseek.com`。',
     advancedConfigHint:
       'Project ID 和 Organization 是 OpenAI 账号/项目路由字段，DeepSeek 一般留空。系统提示词会作为长期规则随上下文发送，例如：“你是我的中文学习助手，回答先给结论，再给例子。”',
     insecureHttpWarning: '当前使用的是 HTTP。API key、消息和附件不会经过 TLS 加密，建议网关支持后切换到 HTTPS。',
@@ -373,6 +377,8 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     endpointMode: 'Endpoint mode',
     baseUrl: 'Base URL',
     baseUrlHint: 'Enter only the API root. The endpoint mode decides whether `/responses` or `/chat/completions` is appended.',
+    baseUrlRequiredTitle: 'Base URL required',
+    baseUrlRequiredMessage: 'Enter an API root first, such as `https://api.openai.com/v1` or `https://api.deepseek.com`.',
     advancedConfigHint:
       'Project ID and Organization are OpenAI account/project routing fields; leave them empty for DeepSeek. The system prompt is sent as a long-lived rule, for example: "You are my Chinese learning assistant. Answer with a short conclusion, then examples."',
     insecureHttpWarning: 'You are using HTTP. Your API key, messages, and attachments are not protected by TLS. Switch to HTTPS when your gateway supports it.',

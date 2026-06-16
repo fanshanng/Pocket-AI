@@ -162,6 +162,9 @@ check(app.includes("copyConversationExport(sessionContextConversation, 'markdown
 check(app.includes("copySelectedSessionExports('json')"), 'Selected session JSON export action missing');
 check(app.includes('refreshAttachmentCacheStats'), 'Attachment cache stats refresh action missing');
 check(app.includes('copy.attachmentCacheStats'), 'Attachment cache stats display missing');
+check(app.includes('Let users clear a preset URL before pasting a replacement'), 'API Base URL editor should allow temporary empty values');
+check(app.includes('requireBaseUrl?: boolean'), 'API profile save should expose an explicit Base URL requirement');
+check(app.includes('copy.baseUrlRequiredMessage'), 'API Base URL required prompt missing');
 check(files.includes('export type AttachmentCacheStats'), 'Attachment cache stats type missing');
 check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachment cache stats should read the attachment directory');
 check(files.includes('referencedFileCount'), 'Attachment cache stats should include referenced attachment count');
