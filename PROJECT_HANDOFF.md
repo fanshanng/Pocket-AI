@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.15` / Android `versionCode 50`.
+- Current version: `1.2.16` / Android `versionCode 51`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -67,6 +67,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.13 simplifies the pending image preview modal so the top-right close button is the only preview action; attachment chip deletion remains on the chip itself.
 - v1.2.14 adds clearer localized oversized-attachment prompts and cleans up copied files if the real copied size exceeds the attachment limit.
 - v1.2.15 starts the audit-comment convention with focused English comments around recent attachment-size and shared-image edge cases; behavior is unchanged.
+- v1.2.16 adds focused English audit comments and smoke protection around chat export privacy boundaries; export behavior is unchanged.
 
 ## Key Files
 
@@ -198,7 +199,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.15 APK SHA-256:
+Current v1.2.16 APK SHA-256:
+
+```text
+7AE867604116637E0C3D6FE3202FE644F75E96F01133DB9EF71017B81BD73067
+```
+
+Previous v1.2.15 APK SHA-256:
 
 ```text
 8EF02AAF6A30481438C4D80BBE2EDDB1A95EFC3CAB4E9A7FE912AE3F928E5814

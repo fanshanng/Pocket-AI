@@ -170,6 +170,8 @@ export function formatConversationMarkdown(conversation: ConversationRecord): st
 }
 
 function formatAttachmentForExport(attachment: AttachmentRecord) {
+  // Export only portable metadata. Local file URIs stay on-device and should
+  // never be copied into JSON/Markdown backups or GitHub release notes.
   return {
     id: attachment.id,
     kind: attachment.kind,
@@ -201,6 +203,8 @@ function formatMessageForJsonExport(message: ChatMessage) {
 }
 
 function formatConversationForJsonExport(conversation: ConversationRecord) {
+  // Keep provider routing and local response-chain state out of backups; API
+  // profiles and keys are managed through the separate settings storage path.
   return {
     id: conversation.id,
     title: conversation.title,
@@ -216,6 +220,8 @@ function formatConversationForJsonExport(conversation: ConversationRecord) {
 export function formatConversationsJson(conversations: ConversationRecord[]): string {
   return JSON.stringify(
     {
+      // Bump this only when the exported JSON shape changes and import/migration
+      // code knows how to read both old and new versions.
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       source: 'Pocket AI',

@@ -152,6 +152,7 @@ check(conversations.includes('export function formatConversationJson'), 'JSON co
 check(conversations.includes('export function formatConversationsJson'), 'Multi-conversation JSON export missing');
 check(conversations.includes('schemaVersion: 1'), 'JSON conversation export schema version missing');
 check(conversations.includes('formatAttachmentForExport'), 'JSON export should sanitize attachment metadata');
+check(conversations.includes('Export only portable metadata'), 'JSON export privacy audit comment missing');
 check(!conversations.includes('apiKey'), 'Conversation export code should not reference API keys');
 check(!/formatAttachmentForExport[\s\S]*uri:/.test(conversations), 'JSON export should not include local attachment URIs');
 check(app.includes("copyConversationExport(sessionContextConversation, 'json')"), 'Session context JSON export action missing');
