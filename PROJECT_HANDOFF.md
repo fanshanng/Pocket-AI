@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.21` / Android `versionCode 56`.
+- Current version: `1.2.22` / Android `versionCode 57`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -73,6 +73,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.19 extracts the model picker header, API profile chips, and model list into `src/components/ModelPickerContent.tsx` while leaving bottom-sheet animation and model/profile state in `App.tsx`; picker behavior is unchanged.
 - v1.2.20 fixes API Base URL editing so clearing a preset URL no longer immediately restores the default while the user is replacing it; saved profiles and network actions still require a non-empty URL.
 - v1.2.21 extracts editable API profile draft helpers into `src/lib/profileDrafts.ts` so Base URL draft behavior is guarded outside `App.tsx`; UI and request behavior are unchanged.
+- v1.2.22 adds provider capability metadata and default inference in `src/lib/providerCapabilities.ts` as a foundation for future per-profile features such as web search; request behavior and UI are unchanged.
 
 ## Key Files
 
@@ -92,6 +93,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - Accepts an optional `AbortSignal` so generation can be stopped.
   - Accepts `onTextDelta` for real-time streaming text updates.
   - Collects downloadable image/document URLs from assistant output and saves them as attachments.
+- `src/lib/providerCapabilities.ts`
+  - Pure capability inference for API profiles, covering protocol support, streaming, native attachments, reasoning, response chaining, system prompts, and future web search eligibility.
 - `src/lib/profileDrafts.ts`
   - Pure helpers for editable API profile drafts, including the temporary empty Base URL state used while replacing preset URLs.
 - `src/lib/files.ts`
@@ -168,15 +171,17 @@ Recommended next tasks:
    Keep framework work small: extract presentational pieces first, then hooks, then provider capabilities.
 2. Split `App.tsx`.
    Extract `ChatScreen`, `Composer`, `SettingsScreen`, `ModelPickerSheet`, `SessionDrawer`, `AttachmentMenu`, and related hooks in separate patch versions.
-3. Provider capability flags.
-   Track whether a profile supports Responses chaining, streaming, images, files, system prompts, reasoning parameters, and future web search.
-4. Rich generated files.
+3. Release stability audit.
+   Check README, release notes, architecture plan, forbidden upload files, version numbers, and full manual regression before cutting the final 1.2-series build.
+4. Provider-specific features.
+   Use `src/lib/providerCapabilities.ts` before adding future web search, generated files, or provider-specific request parameters.
+5. Rich generated files.
    Add provider-specific image generation and PDF/DOCX export. Current support covers downloaded image/document URLs only.
-5. Conversation management.
+6. Conversation management.
    Add pin, batch delete, import, and share-sheet export.
-6. Context management.
+7. Context management.
    Add recent-message windows, automatic old-message summaries, and per-provider token/attachment limits.
-7. Security polish.
+8. Security polish.
    Add app lock / biometric unlock and encrypted backup/restore.
 
 ## Validation Commands
@@ -216,7 +221,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.21 APK SHA-256:
+Current v1.2.22 APK SHA-256:
+
+```text
+C72FF948C5D988BC276835083507E119DF396453F361E8EA5A8A4968590FB103
+```
+
+Previous v1.2.21 APK SHA-256:
 
 ```text
 5267DD35DD44520C2A80BCA5199A03AC9B15666226C7CAB4D46CB6034FA32F98

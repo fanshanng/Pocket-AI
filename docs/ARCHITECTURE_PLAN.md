@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.2.21`.
+Current version: `v1.2.22`.
 
 ## Refactor Rules
 
@@ -110,6 +110,7 @@ Prefer explicit import/export boundaries:
 - `v1.2.19`: Extracted `ModelPickerContent` while keeping bottom-sheet animation and model/profile state in `App.tsx`.
 - `v1.2.20`: Fixed API Base URL editing so clearing a preset URL does not immediately restore the default while pasting a replacement.
 - `v1.2.21`: Extracted editable API profile draft helpers for Base URL draft validation and sanitization.
-- `v1.2.22`: Add provider capability types and default capability inference without changing requests.
-- `v1.2.23`: Plan and prototype network search profile settings behind capability checks.
-- `v1.2.24`: Add JSON chat import with schema validation.
+- `v1.2.22`: Added provider capability types and default capability inference without changing requests.
+- `v1.2.23`: Final 1.2-series release stability audit, version record cleanup, forbidden-file scan, and full regression checklist.
+- `v1.3.0`: Publish the latest stable 1.2-series build as the next public minor release.
+- `v1.3.x`: Add network search profile settings behind provider capability checks.

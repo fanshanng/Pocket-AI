@@ -23,6 +23,7 @@ const codeBlock = read('src/components/CodeBlock.tsx');
 const pendingAttachmentBar = read('src/components/PendingAttachmentBar.tsx');
 const modelPickerContent = read('src/components/ModelPickerContent.tsx');
 const profileDrafts = read('src/lib/profileDrafts.ts');
+const providerCapabilities = read('src/lib/providerCapabilities.ts');
 const conversations = read('src/lib/conversations.ts');
 const drawerGestures = read('src/lib/drawerGestures.ts');
 const openai = read('src/lib/openai.ts');
@@ -175,6 +176,35 @@ check(
   'API editable draft sanitizer should preserve temporary empty Base URL values'
 );
 check(profileDrafts.includes('persisted profiles still use sanitizeProfile'), 'API draft sanitizer audit comment missing');
+for (const capabilityGuard of [
+  'export type ProviderCapabilities',
+  'supportsResponses',
+  'supportsChatCompletions',
+  'supportsResponseChaining',
+  'supportsStreaming',
+  'supportsImages',
+  'supportsFiles',
+  'supportsSystemPrompt',
+  'supportsReasoning',
+  'supportsWebSearch',
+  'export function inferProtocolCapabilities',
+  'export function inferProviderCapabilities',
+  'export function canSendNativeAttachments',
+  'isDeepSeekReasoningModel',
+]) {
+  check(providerCapabilities.includes(capabilityGuard), `Provider capability guard missing ${capabilityGuard}`);
+}
+check(
+  providerCapabilities.includes('supportsWebSearch: false') &&
+    providerCapabilities.includes('later version adds explicit profile UI and request payload support'),
+  'Provider web search capability should stay off until UI and request payload support are added'
+);
+check(
+  providerCapabilities.includes("profile.apiProtocol === 'chatCompletions'") &&
+    providerCapabilities.includes('modelSupportsReasoning(profile.model)'),
+  'Provider reasoning capability should reflect protocol and model inference'
+);
+check(!openai.includes('inferProviderCapabilities'), 'Provider capability metadata should not change request construction yet');
 check(files.includes('export type AttachmentCacheStats'), 'Attachment cache stats type missing');
 check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachment cache stats should read the attachment directory');
 check(files.includes('referencedFileCount'), 'Attachment cache stats should include referenced attachment count');
