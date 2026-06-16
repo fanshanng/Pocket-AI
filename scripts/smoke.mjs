@@ -20,6 +20,7 @@ const app = read('App.tsx');
 const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
 const messageBubble = read('src/components/MessageBubble.tsx');
 const codeBlock = read('src/components/CodeBlock.tsx');
+const conversations = read('src/lib/conversations.ts');
 const openai = read('src/lib/openai.ts');
 const files = read('src/lib/files.ts');
 const storage = read('src/lib/storage.ts');
@@ -143,5 +144,16 @@ check(codeBlock.includes('Copy'), 'CodeBlock copy action missing');
 check(codeBlock.includes('Fullscreen code'), 'CodeBlock fullscreen action missing');
 check(codeBlock.includes('onScrollBeginDrag={onHorizontalGestureStart}'), 'CodeBlock horizontal gesture start hook missing');
 check(codeBlock.includes('onScrollEndDrag={onHorizontalGestureEnd}'), 'CodeBlock horizontal gesture end hook missing');
+
+check(conversations.includes('export function formatConversationMarkdown'), 'Markdown conversation export missing');
+check(conversations.includes('export function formatConversationJson'), 'JSON conversation export missing');
+check(conversations.includes('export function formatConversationsJson'), 'Multi-conversation JSON export missing');
+check(conversations.includes('schemaVersion: 1'), 'JSON conversation export schema version missing');
+check(conversations.includes('formatAttachmentForExport'), 'JSON export should sanitize attachment metadata');
+check(!conversations.includes('apiKey'), 'Conversation export code should not reference API keys');
+check(!/formatAttachmentForExport[\s\S]*uri:/.test(conversations), 'JSON export should not include local attachment URIs');
+check(app.includes("copyConversationExport(sessionContextConversation, 'json')"), 'Session context JSON export action missing');
+check(app.includes("copyConversationExport(sessionContextConversation, 'markdown')"), 'Session context Markdown export action missing');
+check(app.includes("copySelectedSessionExports('json')"), 'Selected session JSON export action missing');
 
 console.log('Smoke checks passed');

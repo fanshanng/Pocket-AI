@@ -165,3 +165,64 @@ export function formatConversationMarkdown(conversation: ConversationRecord): st
 
   return lines.join('\n');
 }
+
+function formatAttachmentForExport(attachment: AttachmentRecord) {
+  return {
+    id: attachment.id,
+    kind: attachment.kind,
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+  };
+}
+
+function formatMessageForJsonExport(message: ChatMessage) {
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    createdAt: message.createdAt,
+    error: message.error,
+    attachments: message.attachments.map(formatAttachmentForExport),
+    variants: message.variants?.map((variant) => ({
+      id: variant.id,
+      text: variant.text,
+      createdAt: variant.createdAt,
+      attachments: variant.attachments.map(formatAttachmentForExport),
+      assistantMessageId: variant.assistantMessageId,
+      assistantText: variant.assistantText,
+      assistantError: variant.assistantError,
+    })),
+    activeVariantIndex: message.activeVariantIndex,
+  };
+}
+
+function formatConversationForJsonExport(conversation: ConversationRecord) {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    model: conversation.model,
+    assistantKind: conversation.assistantKind,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    pinned: conversation.pinned,
+    messages: conversation.messages.map(formatMessageForJsonExport),
+  };
+}
+
+export function formatConversationsJson(conversations: ConversationRecord[]): string {
+  return JSON.stringify(
+    {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      source: 'Pocket AI',
+      conversations: conversations.map(formatConversationForJsonExport),
+    },
+    null,
+    2
+  );
+}
+
+export function formatConversationJson(conversation: ConversationRecord): string {
+  return formatConversationsJson([conversation]);
+}

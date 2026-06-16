@@ -63,7 +63,9 @@ import { COPY } from './src/i18n/copy';
 import {
   conversationMatchesQuery,
   createConversation,
+  formatConversationJson,
   formatConversationMarkdown,
+  formatConversationsJson,
   formatRelativeTime,
   getAllConversationAttachments,
   getConversationAttachments,
@@ -319,6 +321,7 @@ export default function App() {
   const [sessionSelectionMode, setSessionSelectionMode] = useState(false);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [sessionContextMenuId, setSessionContextMenuId] = useState<string | null>(null);
+  const [selectedExportMenuVisible, setSelectedExportMenuVisible] = useState(false);
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
   const [draftSessionTitle, setDraftSessionTitle] = useState('');
   const [composerExpanded, setComposerExpanded] = useState(false);
@@ -725,6 +728,7 @@ export default function App() {
     if (!open) {
       setSessionSelectionMode(false);
       setSelectedSessionIds([]);
+      setSelectedExportMenuVisible(false);
       setSessionSearchVisible(false);
       setSessionSearchQuery('');
       setSessionSearchRaised(false);
@@ -2575,20 +2579,38 @@ export default function App() {
     setSessionSelectionMode((current) => {
       if (current) {
         setSelectedSessionIds([]);
+        setSelectedExportMenuVisible(false);
       }
       return !current;
     });
   }
 
-  async function copySelectedSessionExports() {
+  async function copySelectedSessionExports(format: 'markdown' | 'json') {
     const selected = sortedConversations.filter((conversation) => selectedSessionIds.includes(conversation.id));
     if (selected.length === 0) {
       return;
     }
-    await Clipboard.setStringAsync(selected.map(formatConversationMarkdown).join('\n\n---\n\n'));
-    Alert.alert(copy.copySelectedSessions, copy.copiedSessionExport);
+    const output =
+      format === 'json'
+        ? formatConversationsJson(selected)
+        : selected.map(formatConversationMarkdown).join('\n\n---\n\n');
+    await Clipboard.setStringAsync(output);
+    setSelectedExportMenuVisible(false);
+    Alert.alert(
+      copy.copySelectedSessions,
+      format === 'json' ? copy.copiedSessionJson : copy.copiedSessionMarkdown
+    );
     setSessionSelectionMode(false);
     setSelectedSessionIds([]);
+  }
+
+  function promptCopySelectedSessionExports() {
+    const count = selectedSessionIds.length;
+    if (count === 0) {
+      return;
+    }
+
+    setSelectedExportMenuVisible(true);
   }
 
   function toggleSessionSearch() {
@@ -2616,6 +2638,7 @@ export default function App() {
     updateConversations(conversations, nextActiveId);
     setSelectedSessionIds([]);
     setSessionSelectionMode(false);
+    setSelectedExportMenuVisible(false);
   }
 
   function confirmDeleteSelectedSessions() {
@@ -2682,6 +2705,7 @@ export default function App() {
     }));
     setSelectedSessionIds([]);
     setSessionSelectionMode(false);
+    setSelectedExportMenuVisible(false);
     closeSessionsDrawer();
   }
 
@@ -2720,9 +2744,14 @@ export default function App() {
     closeRenameModal();
   }
 
-  async function copyConversationExport(conversation: ConversationRecord) {
-    await Clipboard.setStringAsync(formatConversationMarkdown(conversation));
-    Alert.alert(copy.exportSession, copy.copiedSessionExport);
+  async function copyConversationExport(conversation: ConversationRecord, format: 'markdown' | 'json') {
+    await Clipboard.setStringAsync(
+      format === 'json' ? formatConversationJson(conversation) : formatConversationMarkdown(conversation)
+    );
+    Alert.alert(
+      copy.exportSession,
+      format === 'json' ? copy.copiedSessionJson : copy.copiedSessionMarkdown
+    );
   }
 
   async function deleteConversation(conversationId: string) {
@@ -3801,7 +3830,7 @@ export default function App() {
                   <Pressable
                     style={[styles.drawerCopyButton, selectedSessionIds.length === 0 && styles.disabledAction]}
                     onPress={() => {
-                      void copySelectedSessionExports();
+                      promptCopySelectedSessionExports();
                     }}
                     disabled={selectedSessionIds.length === 0}
                   >
@@ -3869,6 +3898,46 @@ export default function App() {
         </View>
       )}
 
+      <Modal
+        visible={selectedExportMenuVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedExportMenuVisible(false)}
+      >
+        <Pressable style={styles.contextMenuBackdrop} onPress={() => setSelectedExportMenuVisible(false)}>
+          <View style={styles.sessionContextMenu}>
+            <View style={styles.selectedExportMenuHeader}>
+              <Text style={styles.selectedExportMenuTitle}>{copy.exportSelectedSessionsTitle}</Text>
+              <Text style={styles.selectedExportMenuMessage}>
+                {copy.exportSelectedSessionsMessage(selectedSessionIds.length)}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                void copySelectedSessionExports('markdown');
+              }}
+            >
+              <View style={styles.contextMenuIconWrap}>
+                <FileText size={17} color="#E5E7EB" strokeWidth={2.3} />
+              </View>
+              <Text style={styles.contextMenuText}>{copy.exportSessionMarkdown}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                void copySelectedSessionExports('json');
+              }}
+            >
+              <View style={styles.contextMenuIconWrap}>
+                <FileText size={17} color="#E5E7EB" strokeWidth={2.3} />
+              </View>
+              <Text style={styles.contextMenuText}>{copy.exportSessionJson}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
       <Modal visible={!!sessionContextConversation} animationType="fade" transparent onRequestClose={() => setSessionContextMenuId(null)}>
         <Pressable style={styles.contextMenuBackdrop} onPress={() => setSessionContextMenuId(null)}>
           <View style={styles.sessionContextMenu}>
@@ -3901,6 +3970,34 @@ export default function App() {
                 <EditIcon />
               </View>
               <Text style={styles.contextMenuText}>{copy.renameSession}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                if (sessionContextConversation) {
+                  setSessionContextMenuId(null);
+                  void copyConversationExport(sessionContextConversation, 'markdown');
+                }
+              }}
+            >
+              <View style={styles.contextMenuIconWrap}>
+                <FileText size={17} color="#E5E7EB" strokeWidth={2.3} />
+              </View>
+              <Text style={styles.contextMenuText}>{copy.exportSessionMarkdown}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.contextMenuItem}
+              onPress={() => {
+                if (sessionContextConversation) {
+                  setSessionContextMenuId(null);
+                  void copyConversationExport(sessionContextConversation, 'json');
+                }
+              }}
+            >
+              <View style={styles.contextMenuIconWrap}>
+                <FileText size={17} color="#E5E7EB" strokeWidth={2.3} />
+              </View>
+              <Text style={styles.contextMenuText}>{copy.exportSessionJson}</Text>
             </Pressable>
             <Pressable
               style={styles.contextMenuItem}
@@ -4378,6 +4475,25 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
+  },
+  selectedExportMenuHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#273449',
+  },
+  selectedExportMenuTitle: {
+    color: '#F9FAFB',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  selectedExportMenuMessage: {
+    marginTop: 4,
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   contextMenuItem: {
     minHeight: 52,

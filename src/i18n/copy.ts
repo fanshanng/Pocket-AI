@@ -87,10 +87,15 @@ export type LanguageCopy = {
   renameSessionTitle: string;
   renameSessionPlaceholder: string;
   exportSession: string;
-  copiedSessionExport: string;
+  exportSessionMarkdown: string;
+  exportSessionJson: string;
+  copiedSessionMarkdown: string;
+  copiedSessionJson: string;
   selectSessions: string;
   cancelSelection: string;
   copySelectedSessions: string;
+  exportSelectedSessionsTitle: string;
+  exportSelectedSessionsMessage: (count: number) => string;
   deleteSelectedSessions: string;
   selectedSessionsCount: (count: number) => string;
   selectedSessionsDeleteMessage: (count: number) => string;
@@ -224,11 +229,16 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     renameSession: '重命名',
     renameSessionTitle: '重命名会话',
     renameSessionPlaceholder: '输入新的会话名称',
-    exportSession: '复制导出',
-    copiedSessionExport: '已复制为 Markdown。',
+    exportSession: '导出会话',
+    exportSessionMarkdown: '复制 Markdown',
+    exportSessionJson: '复制 JSON',
+    copiedSessionMarkdown: '已复制为 Markdown。',
+    copiedSessionJson: '已复制为 JSON。',
     selectSessions: '选择',
     cancelSelection: '取消选择',
     copySelectedSessions: '复制所选',
+    exportSelectedSessionsTitle: '导出所选会话',
+    exportSelectedSessionsMessage: (count) => `选择 ${count} 个会话的导出格式。`,
     deleteSelectedSessions: '删除所选',
     selectedSessionsCount: (count) => `已选 ${count} 个`,
     selectedSessionsDeleteMessage: (count) => `确定删除选中的 ${count} 个会话？`,
@@ -360,11 +370,16 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     renameSession: 'Rename',
     renameSessionTitle: 'Rename session',
     renameSessionPlaceholder: 'Enter a new session name',
-    exportSession: 'Copy export',
-    copiedSessionExport: 'Copied as Markdown.',
+    exportSession: 'Export session',
+    exportSessionMarkdown: 'Copy Markdown',
+    exportSessionJson: 'Copy JSON',
+    copiedSessionMarkdown: 'Copied as Markdown.',
+    copiedSessionJson: 'Copied as JSON.',
     selectSessions: 'Select',
     cancelSelection: 'Cancel selection',
     copySelectedSessions: 'Copy selected',
+    exportSelectedSessionsTitle: 'Export selected sessions',
+    exportSelectedSessionsMessage: (count) => `Choose an export format for ${count} sessions.`,
     deleteSelectedSessions: 'Delete selected',
     selectedSessionsCount: (count) => `${count} selected`,
     selectedSessionsDeleteMessage: (count) => `Delete ${count} selected sessions?`,
