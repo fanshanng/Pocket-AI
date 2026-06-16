@@ -265,6 +265,7 @@ export default function App() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
+  const [composerLayoutLift, setComposerLayoutLift] = useState(0);
   const [savingProfile, setSavingProfile] = useState(false);
   const [testingProfile, setTestingProfile] = useState(false);
   const [sending, setSending] = useState(false);
@@ -1086,6 +1087,7 @@ export default function App() {
     if (Platform.OS === 'android') {
       composerLiftTranslateY.stopAnimation();
       composerLiftTranslateY.setValue(-normalizedLift);
+      setComposerLayoutLift((current) => (Math.abs(current - normalizedLift) <= 1 ? current : normalizedLift));
       composerAutoLiftCurrentRef.current = normalizedLift;
       return;
     }
@@ -3052,8 +3054,8 @@ export default function App() {
               onLayout={updateComposerAutoLift}
               style={[
                 styles.composerDock,
-                { marginBottom: composerBottomInset },
-                { transform: [{ translateY: composerLiftTranslateY }] },
+                { marginBottom: composerBottomInset + (Platform.OS === 'android' ? composerLayoutLift : 0) },
+                Platform.OS === 'ios' && { transform: [{ translateY: composerLiftTranslateY }] },
               ]}
             >
               {pendingAttachments.length > 0 && (
@@ -4451,6 +4453,8 @@ const styles = StyleSheet.create({
     borderColor: '#D8E0EA',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
+    elevation: 2,
   },
   attachOptionRow: {
     flexDirection: 'row',

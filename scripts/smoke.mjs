@@ -169,6 +169,8 @@ check(files.includes('name: displayName'), 'Attachment records should keep displ
 check(app.includes('previewAttachment') && app.includes('attachmentPreviewImage'), 'Pending image attachment preview modal missing');
 check(app.includes('pendingChipThumb'), 'Pending image attachment thumbnail missing');
 check(app.includes('formatAttachmentMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
+check(app.includes('composerLayoutLift'), 'Android composer layout lift missing');
+check(app.includes("Platform.OS === 'android' ? composerLayoutLift : 0"), 'Android composer lift should use layout margin for correct tap targets');
 
 for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',
