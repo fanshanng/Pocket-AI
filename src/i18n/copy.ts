@@ -131,6 +131,8 @@ export type LanguageCopy = {
   imagePickerFailedFallback: string;
   filePickerFailed: string;
   filePickerFailedFallback: string;
+  attachmentTooLargeTitle: string;
+  attachmentTooLargeMessage: (fileName: string, sizeLabel: string, limitLabel: string) => string;
   apiKeyRequiredTitle: string;
   apiKeyRequiredMessage: string;
   sendFailed: string;
@@ -281,6 +283,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     imagePickerFailedFallback: '无法读取所选图片。',
     filePickerFailed: '选择文件失败',
     filePickerFailedFallback: '无法读取所选文件。',
+    attachmentTooLargeTitle: '附件过大',
+    attachmentTooLargeMessage: (fileName, sizeLabel, limitLabel) =>
+      `“${fileName}”大小为 ${sizeLabel}，超过当前 ${limitLabel} 限制。请换一个更小的文件，或先压缩后再发送。`,
     apiKeyRequiredTitle: '需要 API key',
     apiKeyRequiredMessage: '请先在设置里保存 API key。',
     sendFailed: '发送失败',
@@ -429,6 +434,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     imagePickerFailedFallback: 'Unable to read the selected image.',
     filePickerFailed: 'File picker failed',
     filePickerFailedFallback: 'Unable to read the selected file.',
+    attachmentTooLargeTitle: 'Attachment too large',
+    attachmentTooLargeMessage: (fileName, sizeLabel, limitLabel) =>
+      `"${fileName}" is ${sizeLabel}, which is above the current ${limitLabel} limit. Use a smaller file or compress it before sending.`,
     apiKeyRequiredTitle: 'API key required',
     apiKeyRequiredMessage: 'Save your API key in settings first.',
     sendFailed: 'Send failed',

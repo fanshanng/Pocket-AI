@@ -166,6 +166,10 @@ check(app.includes('...getAllConversationAttachments(persisted.conversations)') 
 check(conversations.includes('message.variants?.flatMap((variant) => variant.attachments)'), 'Conversation attachment collection should include variant attachments');
 check(files.includes('normalizeDisplayName'), 'Attachment display names should preserve decoded original names');
 check(files.includes('name: displayName'), 'Attachment records should keep display names separate from safe storage names');
+check(files.includes('export const MAX_ATTACHMENT_BYTES'), 'Attachment size limit should be exported for guarded UI messages');
+check(files.includes('AttachmentSizeError'), 'Attachment size errors should use a typed error');
+check(files.includes('FileSystem.deleteAsync(destination'), 'Oversized copied attachments should be cleaned up');
+check(app.includes('copy.attachmentTooLargeMessage'), 'Oversized attachment UI message missing');
 check(app.includes('previewAttachment') && app.includes('attachmentPreviewImage'), 'Pending image attachment preview modal missing');
 check(!app.includes('attachmentPreviewDelete') && !app.includes('attachmentPreviewActions'), 'Pending image preview should only use the top-right close button');
 check(app.includes('pendingChipThumb'), 'Pending image attachment thumbnail missing');

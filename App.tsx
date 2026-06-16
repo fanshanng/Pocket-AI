@@ -88,6 +88,7 @@ import {
   clearAllAttachmentFiles,
   deleteAttachmentRecords,
   getAttachmentCacheStats,
+  isAttachmentSizeError,
   pickDocumentAttachments,
   pickImageAttachments,
   persistSharedImageAttachments,
@@ -1024,7 +1025,10 @@ export default function App() {
         }
       } catch (error) {
         if (mounted) {
-          Alert.alert(copy.imagePickerFailed, error instanceof Error ? error.message : copy.imagePickerFailedFallback);
+          Alert.alert(
+            isAttachmentSizeError(error) ? copy.attachmentTooLargeTitle : copy.imagePickerFailed,
+            getAttachmentFailureMessage(error, copy.imagePickerFailedFallback)
+          );
         }
       } finally {
         clearSharedImages();
@@ -1049,7 +1053,13 @@ export default function App() {
       mounted = false;
       unsubscribe?.();
     };
-  }, [copy.imagePickerFailed, copy.imagePickerFailedFallback, ready]);
+  }, [
+    copy.attachmentTooLargeMessage,
+    copy.attachmentTooLargeTitle,
+    copy.imagePickerFailed,
+    copy.imagePickerFailedFallback,
+    ready,
+  ]);
 
   function updateConversations(nextConversations: ConversationRecord[], nextActiveId: string | null) {
     shouldScrollToBottomRef.current = true;
@@ -1234,6 +1244,17 @@ export default function App() {
       parts.push(formatBytes(attachment.size));
     }
     return parts.join(' · ');
+  }
+
+  function getAttachmentFailureMessage(error: unknown, fallbackMessage: string): string {
+    if (isAttachmentSizeError(error)) {
+      return copy.attachmentTooLargeMessage(
+        error.fileName,
+        formatBytes(error.size),
+        formatBytes(error.limit)
+      );
+    }
+    return error instanceof Error ? error.message : fallbackMessage;
   }
 
   async function refreshAttachmentCacheStats() {
@@ -1828,7 +1849,10 @@ export default function App() {
     try {
       appendPendingAttachments(await pickAttachments());
     } catch (error) {
-      Alert.alert(failedTitle, error instanceof Error ? error.message : fallbackMessage);
+      Alert.alert(
+        isAttachmentSizeError(error) ? copy.attachmentTooLargeTitle : failedTitle,
+        getAttachmentFailureMessage(error, fallbackMessage)
+      );
     }
   }
 

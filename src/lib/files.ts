@@ -8,7 +8,30 @@ import { makeId } from './ids';
 
 const ROOT_DIR = `${FileSystem.documentDirectory}ai-chat-pocket/`;
 const ATTACHMENT_DIR = `${ROOT_DIR}attachments/`;
-const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+export class AttachmentSizeError extends Error {
+  readonly code = 'ATTACHMENT_TOO_LARGE';
+
+  constructor(
+    readonly fileName: string,
+    readonly size: number,
+    readonly limit: number
+  ) {
+    super(`Attachment "${fileName}" is too large (${size} > ${limit}).`);
+    this.name = 'AttachmentSizeError';
+    Object.setPrototypeOf(this, AttachmentSizeError.prototype);
+  }
+}
+
+export function isAttachmentSizeError(error: unknown): error is AttachmentSizeError {
+  return (
+    error instanceof AttachmentSizeError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: unknown }).code === 'ATTACHMENT_TOO_LARGE')
+  );
+}
 
 export type SharedImageInput = string | {
   uri: string;
@@ -64,6 +87,12 @@ function inferMimeFromName(name: string, fallback: string): string {
 
 function inferKindFromNameOrMime(name: string, mimeType: string): PendingAttachment['kind'] {
   return mimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(name) ? 'image' : 'file';
+}
+
+function assertAttachmentSize(displayName: string, size: number): void {
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw new AttachmentSizeError(displayName, size, MAX_ATTACHMENT_BYTES);
+  }
 }
 
 async function ensureAttachmentDir(): Promise<void> {
@@ -154,17 +183,23 @@ async function persistAsset(
   },
   kind: PendingAttachment['kind']
 ): Promise<PendingAttachment> {
+  const displayName = normalizeDisplayName(input.name, `${kind}-${Date.now()}`);
   const size = input.size ?? 0;
-  if (size > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`File is too large. The current limit is ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)}MB.`);
-  }
+  assertAttachmentSize(displayName, size);
 
   await ensureAttachmentDir();
-  const displayName = normalizeDisplayName(input.name, `${kind}-${Date.now()}`);
   const safeName = sanitizeName(displayName) || `${kind}-${Date.now()}`;
   const id = makeId(kind);
   const destination = `${ATTACHMENT_DIR}${id}_${safeName}`;
   await FileSystem.copyAsync({ from: input.uri, to: destination });
+  const info = await FileSystem.getInfoAsync(destination).catch(() => null);
+  const finalSize = info?.exists ? info.size ?? size : size;
+  try {
+    assertAttachmentSize(displayName, finalSize);
+  } catch (error) {
+    await FileSystem.deleteAsync(destination, { idempotent: true }).catch(() => undefined);
+    throw error;
+  }
 
   return {
     id,
@@ -172,7 +207,7 @@ async function persistAsset(
     name: displayName,
     uri: destination,
     mimeType: inferMimeFromName(displayName, input.mimeType || 'application/octet-stream'),
-    size,
+    size: finalSize,
   };
 }
 
