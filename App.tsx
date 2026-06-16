@@ -58,6 +58,7 @@ import {
 } from './src/components/AppIcons';
 import { DrawerGestureContext } from './src/components/DrawerGestureContext';
 import { MessageBubble } from './src/components/MessageBubble';
+import { PendingAttachmentBar } from './src/components/PendingAttachmentBar';
 import { SlideFadePresence } from './src/components/SlideFadePresence';
 import { COPY } from './src/i18n/copy';
 import {
@@ -3085,44 +3086,14 @@ export default function App() {
                 Platform.OS === 'ios' && { transform: [{ translateY: composerLiftTranslateY }] },
               ]}
             >
-              {pendingAttachments.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.pendingRail}
-                >
-                  {pendingAttachments.map((attachment) => (
-                    <Pressable
-                      key={attachment.id}
-                      style={[styles.pendingChip, themedPanel]}
-                      onPress={() => openPendingAttachment(attachment)}
-                    >
-                      {attachment.kind === 'image' && (
-                        <Image source={{ uri: attachment.uri }} style={styles.pendingChipThumb} />
-                      )}
-                      <View style={styles.pendingChipBody}>
-                        <Text style={[styles.pendingChipType, { color: theme.primary }]} numberOfLines={1}>
-                          {formatAttachmentMeta(attachment)}
-                        </Text>
-                        <Text style={[styles.pendingChipText, { color: theme.subtle }]} numberOfLines={1}>
-                          {attachment.name}
-                        </Text>
-                      </View>
-                      <Pressable
-                        style={[styles.pendingChipRemove, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          removePendingAttachment(attachment.id);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={copy.delete}
-                      >
-                        <X size={13} color={theme.muted} strokeWidth={2.5} />
-                      </Pressable>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
+              <PendingAttachmentBar
+                attachments={pendingAttachments}
+                theme={theme}
+                formatMeta={formatAttachmentMeta}
+                onOpenAttachment={openPendingAttachment}
+                onRemoveAttachment={removePendingAttachment}
+                removeAccessibilityLabel={copy.delete}
+              />
               <SlideFadePresence
                 visible={attachmentMenuVisible && !composerDisabled}
                 from="bottom"
@@ -4336,52 +4307,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: 10,
-  },
-  pendingRail: {
-    gap: 8,
-    paddingHorizontal: 2,
-    paddingBottom: 8,
-  },
-  pendingChip: {
-    width: 214,
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 13,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#D7DEE8',
-  },
-  pendingChipThumb: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
-    backgroundColor: '#E2E8F0',
-  },
-  pendingChipBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pendingChipType: {
-    color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  pendingChipText: {
-    color: '#334155',
-    fontSize: 13,
-  },
-  pendingChipRemove: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
   },
   composerDock: {
     marginHorizontal: 12,

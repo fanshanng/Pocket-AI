@@ -20,6 +20,7 @@ const app = read('App.tsx');
 const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
 const messageBubble = read('src/components/MessageBubble.tsx');
 const codeBlock = read('src/components/CodeBlock.tsx');
+const pendingAttachmentBar = read('src/components/PendingAttachmentBar.tsx');
 const conversations = read('src/lib/conversations.ts');
 const drawerGestures = read('src/lib/drawerGestures.ts');
 const openai = read('src/lib/openai.ts');
@@ -173,8 +174,9 @@ check(files.includes('FileSystem.deleteAsync(destination'), 'Oversized copied at
 check(app.includes('copy.attachmentTooLargeMessage'), 'Oversized attachment UI message missing');
 check(app.includes('previewAttachment') && app.includes('attachmentPreviewImage'), 'Pending image attachment preview modal missing');
 check(!app.includes('attachmentPreviewDelete') && !app.includes('attachmentPreviewActions'), 'Pending image preview should only use the top-right close button');
-check(app.includes('pendingChipThumb'), 'Pending image attachment thumbnail missing');
-check(app.includes('formatAttachmentMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
+check(app.includes('<PendingAttachmentBar'), 'Pending attachment rail should be rendered through PendingAttachmentBar');
+check(pendingAttachmentBar.includes('styles.thumb'), 'Pending image attachment thumbnail missing');
+check(pendingAttachmentBar.includes('formatMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
 check(app.includes('composerLayoutLift'), 'Android composer layout lift missing');
 check(app.includes("Platform.OS === 'android' ? composerLayoutLift : 0"), 'Android composer lift should use layout margin for correct tap targets');
 

@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.17` / Android `versionCode 52`.
+- Current version: `1.2.18` / Android `versionCode 53`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -69,6 +69,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.15 starts the audit-comment convention with focused English comments around recent attachment-size and shared-image edge cases; behavior is unchanged.
 - v1.2.16 adds focused English audit comments and smoke protection around chat export privacy boundaries; export behavior is unchanged.
 - v1.2.17 refreshes the public README and adds `docs/ARCHITECTURE_PLAN.md` as the living architecture/roadmap document; runtime behavior is unchanged.
+- v1.2.18 extracts the pending attachment chip rail into `src/components/PendingAttachmentBar.tsx` as the first low-risk presentational split from `App.tsx`; attachment behavior is unchanged.
 
 ## Key Files
 
@@ -96,6 +97,9 @@ This file is for starting a fresh Codex conversation without losing project cont
   - Chat bubble, Markdown rendering, compact copy button, long-press copy.
   - Uses drawn copy/check icons instead of font-dependent symbols.
   - Detects credential-like / technical text and renders it as a monospace horizontal block.
+- `src/components/PendingAttachmentBar.tsx`
+  - Presentational pending attachment chip rail used above the composer.
+  - Keeps preview/delete callbacks owned by `App.tsx` while moving chip rendering styles out of the app shell.
 - `src/plugins/`
   - Internal content plugin registry.
   - `latexMath.ts` transforms common LaTeX/math/cryptography tokens into readable symbols.
@@ -204,7 +208,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.17 APK SHA-256:
+Current v1.2.18 APK SHA-256:
+
+```text
+EA483297B43BC0AA644064E8A1173C36F25D4F0F3A7F48618AEE9CA90BFDB416
+```
+
+Previous v1.2.17 APK SHA-256:
 
 ```text
 FC37B9508A5B07EE694BD6520E66CB31AB6BC5DADAF1E3B687F6C0C691445D5F

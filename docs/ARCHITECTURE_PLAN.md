@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.2.17`.
+Current version: `v1.2.18`.
 
 ## Refactor Rules
 
@@ -106,7 +106,7 @@ Prefer explicit import/export boundaries:
 
 ## Suggested Version Queue
 
-- `v1.2.18`: Extract a low-risk presentational UI piece, preferably `AttachmentMenu` or `PendingAttachmentBar`.
+- `v1.2.18`: Extracted `PendingAttachmentBar` as the first low-risk presentational split from `App.tsx`.
 - `v1.2.19`: Extract model picker presentational structure without changing bottom-sheet behavior.
 - `v1.2.20`: Extract API profile/model picker state helpers.
 - `v1.2.21`: Add provider capability types and default capability inference without changing requests.
