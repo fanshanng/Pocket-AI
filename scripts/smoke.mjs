@@ -164,6 +164,11 @@ check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachme
 check(files.includes('referencedFileCount'), 'Attachment cache stats should include referenced attachment count');
 check(app.includes('...getAllConversationAttachments(persisted.conversations)') && app.includes('...pendingAttachments'), 'Attachment cache stats should include saved and pending attachment references');
 check(conversations.includes('message.variants?.flatMap((variant) => variant.attachments)'), 'Conversation attachment collection should include variant attachments');
+check(files.includes('normalizeDisplayName'), 'Attachment display names should preserve decoded original names');
+check(files.includes('name: displayName'), 'Attachment records should keep display names separate from safe storage names');
+check(app.includes('previewAttachment') && app.includes('attachmentPreviewImage'), 'Pending image attachment preview modal missing');
+check(app.includes('pendingChipThumb'), 'Pending image attachment thumbnail missing');
+check(app.includes('formatAttachmentMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
 
 for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',

@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.10` / Android `versionCode 45`.
+- Current version: `1.2.11` / Android `versionCode 46`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -62,6 +62,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.8 extracts the existing drawer gesture thresholds and swipe decision helpers into `src/lib/drawerGestures.ts` and adds smoke guards, without changing PanResponder behavior, drawer open edge, Markdown horizontal scroll locking, or composer behavior.
 - v1.2.9 adds attachment cache file-count and size statistics in Settings > Chat Storage with a manual refresh action, without changing attachment sending, export, drawer gestures, or clear-local-data behavior.
 - v1.2.10 fixes attachment cache stats by showing both app-private cache-directory files and chat/pending attachment references, including message variant attachments, so Settings no longer reports only a misleading `0` when cached files are not discoverable.
+- v1.2.11 improves pending attachment chips with original display names, type/size metadata, image thumbnails, and a pending image preview/delete modal while keeping storage paths ASCII-safe and attachment sending unchanged.
 
 ## Key Files
 
@@ -193,7 +194,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.10 APK SHA-256:
+Current v1.2.11 APK SHA-256:
+
+```text
+7D0212B40F522B7B4B6D65A0B77E4006F7862EC831F445600ED5E70A9C19D6EF
+```
+
+Previous v1.2.10 APK SHA-256:
 
 ```text
 70B59DFECAF467595B0B89AEB9A8AB7D8BB86192FD1EABA4379719AF2A25EBA0

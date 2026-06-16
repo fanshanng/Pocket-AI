@@ -27,6 +27,19 @@ function sanitizeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function normalizeDisplayName(value: string | null | undefined, fallback: string): string {
+  const trimmed = (value || '').trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
 function extensionFromMime(mimeType: string | null | undefined): string {
   if (mimeType === 'image/png') return '.png';
   if (mimeType === 'image/gif') return '.gif';
@@ -147,7 +160,8 @@ async function persistAsset(
   }
 
   await ensureAttachmentDir();
-  const safeName = sanitizeName(input.name || `${kind}-${Date.now()}`);
+  const displayName = normalizeDisplayName(input.name, `${kind}-${Date.now()}`);
+  const safeName = sanitizeName(displayName) || `${kind}-${Date.now()}`;
   const id = makeId(kind);
   const destination = `${ATTACHMENT_DIR}${id}_${safeName}`;
   await FileSystem.copyAsync({ from: input.uri, to: destination });
@@ -155,9 +169,9 @@ async function persistAsset(
   return {
     id,
     kind,
-    name: safeName,
+    name: displayName,
     uri: destination,
-    mimeType: inferMimeFromName(safeName, input.mimeType || 'application/octet-stream'),
+    mimeType: inferMimeFromName(displayName, input.mimeType || 'application/octet-stream'),
     size,
   };
 }
@@ -168,8 +182,9 @@ export async function persistRemoteAttachment(input: {
   mimeType?: string;
 }): Promise<AttachmentRecord | null> {
   await ensureAttachmentDir();
-  const urlName = decodeURIComponent(input.url.split('?')[0].split('/').pop() || '');
-  const safeName = sanitizeName(input.name || urlName || `remote-${Date.now()}`);
+  const urlName = normalizeDisplayName(input.url.split('?')[0].split('/').pop(), '');
+  const displayName = normalizeDisplayName(input.name || urlName, `remote-${Date.now()}`);
+  const safeName = sanitizeName(displayName) || `remote-${Date.now()}`;
   const id = makeId('remote');
   const destination = `${ATTACHMENT_DIR}${id}_${safeName}`;
 
@@ -184,7 +199,7 @@ export async function persistRemoteAttachment(input: {
     input.mimeType ||
     'application/octet-stream';
   const info = await FileSystem.getInfoAsync(result.uri);
-  const mimeType = inferMimeFromName(safeName, headerMime);
+  const mimeType = inferMimeFromName(displayName, headerMime);
 
   if (info.exists && (info.size ?? 0) > MAX_ATTACHMENT_BYTES) {
     await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
@@ -193,8 +208,8 @@ export async function persistRemoteAttachment(input: {
 
   return {
     id,
-    kind: inferKindFromNameOrMime(safeName, mimeType),
-    name: safeName,
+    kind: inferKindFromNameOrMime(displayName, mimeType),
+    name: displayName,
     uri: result.uri,
     mimeType,
     size: info.exists ? info.size ?? 0 : 0,

@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -37,6 +38,7 @@ import {
   Image as ImageIcon,
   Maximize2,
   RefreshCw,
+  Trash2,
   X,
 } from 'lucide-react-native';
 
@@ -262,6 +264,7 @@ export default function App() {
   const [composerText, setComposerText] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [testingProfile, setTestingProfile] = useState(false);
   const [sending, setSending] = useState(false);
@@ -1215,6 +1218,23 @@ export default function App() {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
   }
 
+  function formatAttachmentKind(attachment: AttachmentRecord): string {
+    if (attachment.kind === 'image') {
+      return 'IMAGE';
+    }
+    const nameParts = attachment.name.split('.');
+    const extension = nameParts.length > 1 ? nameParts.pop()?.trim() : '';
+    return extension && /^[a-z0-9]{1,8}$/i.test(extension) ? extension.toUpperCase() : 'FILE';
+  }
+
+  function formatAttachmentMeta(attachment: AttachmentRecord): string {
+    const parts = [formatAttachmentKind(attachment)];
+    if (attachment.size > 0) {
+      parts.push(formatBytes(attachment.size));
+    }
+    return parts.join(' · ');
+  }
+
   async function refreshAttachmentCacheStats() {
     setRefreshingAttachmentCacheStats(true);
     try {
@@ -2019,9 +2039,19 @@ export default function App() {
     setAttachmentMenuVisible(false);
     const attachment = pendingAttachments.find((item) => item.id === id);
     setPendingAttachments((current) => current.filter((item) => item.id !== id));
+    setPreviewAttachment((current) => (current?.id === id ? null : current));
     if (attachment) {
       deleteAttachmentRecords([attachment]).catch(() => undefined);
     }
+  }
+
+  function openPendingAttachment(attachment: PendingAttachment) {
+    setAttachmentMenuVisible(false);
+    if (attachment.kind === 'image') {
+      setPreviewAttachment(attachment);
+      return;
+    }
+    void Linking.openURL(attachment.uri);
   }
 
   function createUserMessage(text: string, attachments: AttachmentRecord[]): ChatMessage {
@@ -3036,12 +3066,30 @@ export default function App() {
                     <Pressable
                       key={attachment.id}
                       style={[styles.pendingChip, themedPanel]}
-                      onPress={() => removePendingAttachment(attachment.id)}
+                      onPress={() => openPendingAttachment(attachment)}
                     >
-                      <Text style={[styles.pendingChipType, { color: theme.primary }]}>{attachment.kind.toUpperCase()}</Text>
-                      <Text style={[styles.pendingChipText, { color: theme.subtle }]} numberOfLines={1}>
-                        {attachment.name}
-                      </Text>
+                      {attachment.kind === 'image' && (
+                        <Image source={{ uri: attachment.uri }} style={styles.pendingChipThumb} />
+                      )}
+                      <View style={styles.pendingChipBody}>
+                        <Text style={[styles.pendingChipType, { color: theme.primary }]} numberOfLines={1}>
+                          {formatAttachmentMeta(attachment)}
+                        </Text>
+                        <Text style={[styles.pendingChipText, { color: theme.subtle }]} numberOfLines={1}>
+                          {attachment.name}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={[styles.pendingChipRemove, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removePendingAttachment(attachment.id);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={copy.delete}
+                      >
+                        <X size={13} color={theme.muted} strokeWidth={2.5} />
+                      </Pressable>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -4063,6 +4111,62 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={!!previewAttachment}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPreviewAttachment(null)}
+      >
+        <View style={styles.attachmentPreviewBackdrop}>
+          <View style={[styles.attachmentPreviewCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.attachmentPreviewHeader}>
+              <View style={styles.attachmentPreviewTitleWrap}>
+                <Text style={[styles.attachmentPreviewTitle, { color: theme.text }]} numberOfLines={1}>
+                  {previewAttachment?.name}
+                </Text>
+                {!!previewAttachment && (
+                  <Text style={[styles.attachmentPreviewMeta, { color: theme.muted }]} numberOfLines={1}>
+                    {formatAttachmentMeta(previewAttachment)}
+                  </Text>
+                )}
+              </View>
+              <Pressable
+                style={[styles.attachmentPreviewIconButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+                onPress={() => setPreviewAttachment(null)}
+                accessibilityRole="button"
+                accessibilityLabel={copy.close}
+              >
+                <X size={18} color={theme.text} strokeWidth={2.4} />
+              </Pressable>
+            </View>
+            {!!previewAttachment && (
+              <Image
+                source={{ uri: previewAttachment.uri }}
+                style={styles.attachmentPreviewImage}
+                resizeMode="contain"
+              />
+            )}
+            {!!previewAttachment && (
+              <View style={styles.attachmentPreviewActions}>
+                <Pressable
+                  style={[styles.modalGhost, styles.attachmentPreviewAction, { borderColor: theme.border }]}
+                  onPress={() => setPreviewAttachment(null)}
+                >
+                  <Text style={[styles.modalGhostText, { color: theme.subtle }]}>{copy.close}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.attachmentPreviewDelete, styles.attachmentPreviewAction]}
+                  onPress={() => removePendingAttachment(previewAttachment.id)}
+                >
+                  <Trash2 size={17} color="#FFFFFF" strokeWidth={2.4} />
+                  <Text style={styles.attachmentPreviewDeleteText}>{copy.delete}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -4227,23 +4331,45 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   pendingChip: {
-    maxWidth: 180,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
+    width: 214,
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
     borderRadius: 13,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#D7DEE8',
   },
+  pendingChipThumb: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: '#E2E8F0',
+  },
+  pendingChipBody: {
+    flex: 1,
+    minWidth: 0,
+  },
   pendingChipType: {
     color: '#2563EB',
     fontSize: 10,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   pendingChipText: {
     color: '#334155',
     fontSize: 13,
+  },
+  pendingChipRemove: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   composerDock: {
     marginHorizontal: 12,
@@ -4478,6 +4604,75 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     justifyContent: 'center',
     paddingHorizontal: 18,
+  },
+  attachmentPreviewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  attachmentPreviewCard: {
+    width: '100%',
+    maxHeight: '86%',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+  },
+  attachmentPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  attachmentPreviewTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  attachmentPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  attachmentPreviewMeta: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  attachmentPreviewIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  attachmentPreviewImage: {
+    width: '100%',
+    height: 420,
+    maxHeight: '72%',
+    borderRadius: 14,
+    backgroundColor: '#020617',
+  },
+  attachmentPreviewActions: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  attachmentPreviewAction: {
+    flex: 1,
+  },
+  attachmentPreviewDelete: {
+    minHeight: 46,
+    borderRadius: 16,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  attachmentPreviewDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
   },
   contextMenuBackdrop: {
     flex: 1,
