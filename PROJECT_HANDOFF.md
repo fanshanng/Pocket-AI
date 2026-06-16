@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.7` / Android `versionCode 42`.
+- Current version: `1.2.8` / Android `versionCode 43`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -59,6 +59,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.5 adds Markdown regression fixtures and smoke guards for long formulas, latex/math fenced formulas, wide tables, table inline math/code, regular code blocks, and intentionally unclosed streaming Markdown.
 - v1.2.6 fixes the model picker bottom sheet spacing so the API profile chip rail keeps its own stable area and long model lists scroll below it without covering the API profile row.
 - v1.2.7 adds Markdown/JSON copy export for single chat sessions and selected chat sessions. JSON export includes chat/message metadata and sanitized attachment metadata only, without API keys or local attachment file URIs.
+- v1.2.8 extracts the existing drawer gesture thresholds and swipe decision helpers into `src/lib/drawerGestures.ts` and adds smoke guards, without changing PanResponder behavior, drawer open edge, Markdown horizontal scroll locking, or composer behavior.
 
 ## Key Files
 
@@ -190,7 +191,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.7 APK SHA-256:
+Current v1.2.8 APK SHA-256:
+
+```text
+DFCB140200277A1F6A6F4B464F2BE2F89EB208EE0869E3F33A97AFFD9319B2F1
+```
+
+Previous v1.2.7 APK SHA-256:
 
 ```text
 32076121620DF44505A32AE7554FB8C74F6974E2AD48750E88D9771C5E9E5356

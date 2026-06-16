@@ -28,7 +28,6 @@ import type {
   GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  PanResponderGestureState,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,6 +74,13 @@ import {
   trimTitle,
   upsertConversation,
 } from './src/lib/conversations';
+import {
+  DRAWER_OPEN_EDGE_FRACTION,
+  isLooseDirectionalDelta,
+  isLooseDirectionalSwipe,
+  isSensitiveSessionCloseSwipe,
+  isWithinDrawerOpenEdge,
+} from './src/lib/drawerGestures';
 import {
   captureImageAttachment,
   clearAllAttachmentFiles,
@@ -162,11 +168,6 @@ import type {
 const STREAMING_FLUSH_INTERVAL_MS = 220;
 const STREAMING_SCROLL_INTERVAL_MS = 260;
 const CHAT_BOTTOM_FOLLOW_THRESHOLD = 96;
-const DRAWER_SWIPE_SLOPE = 0.35;
-const DRAWER_SWIPE_MIN_DISTANCE = 5;
-const DRAWER_OPEN_EDGE_FRACTION = 0.25;
-const SESSION_CLOSE_SWIPE_SLOPE = 0.65;
-const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14;
 const COMPOSER_VISIBLE_BOTTOM_GAP = 8;
 const MOTION_SETTLE_EASING = Easing.bezier(0.2, 0, 0, 1);
 const MOTION_EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
@@ -193,46 +194,6 @@ function getDistanceDuration(
 }
 
 type SettingsSection = 'root' | 'api' | 'language' | 'theme' | 'storage' | 'about';
-
-function isLooseDirectionalSwipe(
-  gestureState: PanResponderGestureState,
-  direction: 'left' | 'right',
-  minDistance = DRAWER_SWIPE_MIN_DISTANCE
-): boolean {
-  const signedDx = direction === 'right' ? gestureState.dx : -gestureState.dx;
-  if (signedDx < minDistance) {
-    return false;
-  }
-
-  const absX = Math.abs(gestureState.dx);
-  const absY = Math.abs(gestureState.dy);
-  return absX > absY * DRAWER_SWIPE_SLOPE || Math.abs(gestureState.vx) > 0.14;
-}
-
-function isLooseDirectionalDelta(
-  dx: number,
-  dy: number,
-  direction: 'left' | 'right',
-  minDistance = DRAWER_SWIPE_MIN_DISTANCE
-): boolean {
-  const signedDx = direction === 'right' ? dx : -dx;
-  if (signedDx < minDistance) {
-    return false;
-  }
-
-  return Math.abs(dx) > Math.abs(dy) * DRAWER_SWIPE_SLOPE;
-}
-
-function isSensitiveSessionCloseSwipe(gestureState: PanResponderGestureState): boolean {
-  const signedDx = -gestureState.dx;
-  if (signedDx < SESSION_CLOSE_SWIPE_MIN_DISTANCE) {
-    return false;
-  }
-
-  const absX = Math.abs(gestureState.dx);
-  const absY = Math.abs(gestureState.dy);
-  return absX > Math.max(18, absY * SESSION_CLOSE_SWIPE_SLOPE) || gestureState.vx < -0.18;
-}
 
 export default function App() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -408,7 +369,7 @@ export default function App() {
           ) {
             return false;
           }
-          if (gestureState.x0 > windowWidth * DRAWER_OPEN_EDGE_FRACTION) {
+          if (!isWithinDrawerOpenEdge(gestureState.x0, windowWidth)) {
             return false;
           }
           return isLooseDirectionalSwipe(gestureState, 'right', 7);

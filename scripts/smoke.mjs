@@ -21,6 +21,7 @@ const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
 const messageBubble = read('src/components/MessageBubble.tsx');
 const codeBlock = read('src/components/CodeBlock.tsx');
 const conversations = read('src/lib/conversations.ts');
+const drawerGestures = read('src/lib/drawerGestures.ts');
 const openai = read('src/lib/openai.ts');
 const files = read('src/lib/files.ts');
 const storage = read('src/lib/storage.ts');
@@ -155,5 +156,23 @@ check(!/formatAttachmentForExport[\s\S]*uri:/.test(conversations), 'JSON export 
 check(app.includes("copyConversationExport(sessionContextConversation, 'json')"), 'Session context JSON export action missing');
 check(app.includes("copyConversationExport(sessionContextConversation, 'markdown')"), 'Session context Markdown export action missing');
 check(app.includes("copySelectedSessionExports('json')"), 'Selected session JSON export action missing');
+
+for (const drawerGuard of [
+  'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',
+  'export const DRAWER_SWIPE_SLOPE = 0.35',
+  'export const SESSION_CLOSE_SWIPE_SLOPE = 0.65',
+  'export const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14',
+  'export function isLooseDirectionalSwipe',
+  'export function isSensitiveSessionCloseSwipe',
+  'export function isWithinDrawerOpenEdge',
+]) {
+  check(drawerGestures.includes(drawerGuard), `Drawer gesture guard missing ${drawerGuard}`);
+}
+
+check(app.includes('isWithinDrawerOpenEdge(gestureState.x0, windowWidth)'), 'Drawer open edge should use centralized gesture strategy');
+check(app.includes('style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}'), 'Drawer open edge width should stay at the guarded fraction');
+check(app.includes("isLooseDirectionalSwipe(gestureState, 'right', 7)"), 'Drawer open swipe threshold should stay unchanged');
+check(app.includes("isLooseDirectionalDelta(dx, dy, 'right', 56)"), 'Settings return swipe threshold should stay unchanged');
+check(app.includes('horizontalGestureLocked'), 'Horizontal gesture lock state missing');
 
 console.log('Smoke checks passed');
