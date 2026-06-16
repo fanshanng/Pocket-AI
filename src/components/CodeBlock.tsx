@@ -559,19 +559,18 @@ function CodeBlockComponent({
             contentContainerStyle={styles.fullscreenVerticalContent}
             showsVerticalScrollIndicator
           >
-            <ScrollView
-              horizontal
-              nestedScrollEnabled
-              directionalLockEnabled
-              showsHorizontalScrollIndicator
-              style={styles.codeScroll}
-              contentContainerStyle={[styles.codeScrollContent, { minWidth: fullscreenContentWidth }]}
-              onTouchStart={onHorizontalGestureStart}
-              onTouchEnd={onHorizontalGestureEnd}
-              onTouchCancel={onHorizontalGestureEnd}
-              onScrollBeginDrag={onHorizontalGestureStart}
-              onMomentumScrollEnd={onHorizontalGestureEnd}
-              onScrollEndDrag={onHorizontalGestureEnd}
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            directionalLockEnabled
+            showsHorizontalScrollIndicator
+            style={styles.codeScroll}
+            contentContainerStyle={[styles.codeScrollContent, { minWidth: fullscreenContentWidth }]}
+            onTouchEnd={onHorizontalGestureEnd}
+            onTouchCancel={onHorizontalGestureEnd}
+            onScrollBeginDrag={onHorizontalGestureStart}
+            onMomentumScrollEnd={onHorizontalGestureEnd}
+            onScrollEndDrag={onHorizontalGestureEnd}
             >
               <CodeContent
                 canHighlight={canHighlight}

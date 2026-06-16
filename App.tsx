@@ -119,6 +119,7 @@ import {
   fetchLatestRelease,
   isNewerRelease,
 } from './src/lib/releases';
+import { triggerLongPressHaptic } from './src/lib/haptics';
 import {
   applyApiPreset,
   getActiveProfile,
@@ -160,9 +161,9 @@ const STREAMING_SCROLL_INTERVAL_MS = 260;
 const CHAT_BOTTOM_FOLLOW_THRESHOLD = 96;
 const DRAWER_SWIPE_SLOPE = 0.35;
 const DRAWER_SWIPE_MIN_DISTANCE = 5;
-const DRAWER_OPEN_EDGE_WIDTH = 32;
-const SESSION_CLOSE_SWIPE_SLOPE = 0.08;
-const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 1;
+const DRAWER_OPEN_EDGE_FRACTION = 0.25;
+const SESSION_CLOSE_SWIPE_SLOPE = 0.65;
+const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14;
 const COMPOSER_VISIBLE_BOTTOM_GAP = 8;
 const MOTION_SETTLE_EASING = Easing.bezier(0.2, 0, 0, 1);
 const MOTION_EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
@@ -227,7 +228,7 @@ function isSensitiveSessionCloseSwipe(gestureState: PanResponderGestureState): b
 
   const absX = Math.abs(gestureState.dx);
   const absY = Math.abs(gestureState.dy);
-  return absX > absY * SESSION_CLOSE_SWIPE_SLOPE || signedDx > 4 || Math.abs(gestureState.vx) > 0.03;
+  return absX > Math.max(18, absY * SESSION_CLOSE_SWIPE_SLOPE) || gestureState.vx < -0.18;
 }
 
 export default function App() {
@@ -255,14 +256,20 @@ export default function App() {
   const streamingConversationIdRef = useRef<string | null>(null);
   const regenerateAssistantMessageRef = useRef<(messageId: string) => void>(() => undefined);
   const handledSharedImageUrisRef = useRef(new Set<string>());
+  const mainSceneTranslateX = useRef(new Animated.Value(0)).current;
   const sessionDrawerTranslateX = useRef(new Animated.Value(-Math.max(1, Math.min(windowWidth, 520)))).current;
   const sessionDrawerHiddenOffsetRef = useRef(360);
   const sessionDrawerAnimationIdRef = useRef(0);
   const sessionDrawerClosingRef = useRef(false);
   const sessionDrawerCloseFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDrawerDragFrameRef = useRef<number | null>(null);
+  const sessionDrawerSettleFrameRef = useRef<number | null>(null);
+  const sessionDrawerSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDrawerDragTargetRef = useRef(-Math.max(1, Math.min(windowWidth, 520)));
+  const sessionsVisibleRef = useRef(false);
   const drawerGestureOpeningRef = useRef(false);
+  const suppressNextSessionPressRef = useRef<string | null>(null);
+  const suppressNextSessionPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsPanelTranslateX = useRef(new Animated.Value(0)).current;
   const settingsContentProgress = useRef(new Animated.Value(1)).current;
   const settingsContentAnimationIdRef = useRef(0);
@@ -349,6 +356,7 @@ export default function App() {
   const sessionContextConversation =
     persisted.conversations.find((conversation) => conversation.id === sessionContextMenuId) ?? null;
   const sessionDrawerWidth = Math.max(1, Math.min(windowWidth, 520));
+  sessionsVisibleRef.current = sessionsVisible;
   sessionDrawerHiddenOffsetRef.current = sessionDrawerWidth;
   settingsPanelHiddenOffsetRef.current = Math.max(windowWidth, 320);
   const sessionDrawerPanResponder = useMemo(
@@ -359,27 +367,26 @@ export default function App() {
         onMoveShouldSetPanResponder: (_, gestureState) =>
           isSensitiveSessionCloseSwipe(gestureState),
         onPanResponderGrant: () => {
+          sessionDrawerAnimationIdRef.current += 1;
+          sessionDrawerClosingRef.current = false;
+          drawerGestureOpeningRef.current = false;
+          cancelSessionDrawerSettleFrame();
           cancelSessionDrawerDragFrame();
           sessionDrawerTranslateX.stopAnimation();
+          mainSceneTranslateX.stopAnimation();
         },
         onPanResponderMove: (_, gestureState) => {
           setSessionDrawerPosition(Math.max(-sessionDrawerHiddenOffsetRef.current, Math.min(0, gestureState.dx)));
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -SESSION_CLOSE_SWIPE_MIN_DISTANCE || gestureState.vx < -0.03) {
-            closeSessionsDrawer(true, gestureState.vx);
+          if (gestureState.dx < -windowWidth * 0.16 || gestureState.vx < -0.28) {
+            closeSessionsDrawer(false);
             return;
           }
-          const animationId = sessionDrawerAnimationIdRef.current + 1;
-          sessionDrawerAnimationIdRef.current = animationId;
-          sessionDrawerClosingRef.current = false;
-          animateSessionDrawerTo(0, animationId, gestureState.vx);
+          openSessionsDrawer();
         },
         onPanResponderTerminate: () => {
-          const animationId = sessionDrawerAnimationIdRef.current + 1;
-          sessionDrawerAnimationIdRef.current = animationId;
-          sessionDrawerClosingRef.current = false;
-          animateSessionDrawerTo(0, animationId);
+          openSessionsDrawer();
         },
         onPanResponderTerminationRequest: () => false,
       }),
@@ -393,22 +400,25 @@ export default function App() {
             sessionsVisible ||
             settingsVisible ||
             modelPickerVisible ||
-            chatMenuVisible ||
-            drawerGestureLockCountRef.current > 0
+            chatMenuVisible
           ) {
             return false;
           }
-          if (gestureState.x0 > Math.min(windowWidth * 0.1, DRAWER_OPEN_EDGE_WIDTH)) {
+          if (gestureState.x0 > windowWidth * DRAWER_OPEN_EDGE_FRACTION) {
             return false;
           }
           return isLooseDirectionalSwipe(gestureState, 'right', 7);
         },
         onPanResponderGrant: () => {
+          sessionDrawerAnimationIdRef.current += 1;
           drawerGestureOpeningRef.current = true;
+          cancelSessionDrawerSettleFrame();
           cancelSessionDrawerDragFrame();
           sessionDrawerTranslateX.stopAnimation();
+          mainSceneTranslateX.stopAnimation();
           setSessionsVisible(true);
           sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
+          mainSceneTranslateX.setValue(0);
         },
         onPanResponderMove: (_, gestureState) => {
           const nextX = Math.min(0, -sessionDrawerHiddenOffsetRef.current + Math.max(0, gestureState.dx));
@@ -417,14 +427,14 @@ export default function App() {
         onPanResponderRelease: (_, gestureState) => {
           drawerGestureOpeningRef.current = false;
           if (gestureState.dx > windowWidth * 0.14 || gestureState.vx > 0.38) {
-            openSessionsDrawer(gestureState.vx);
+            openSessionsDrawer();
             return;
           }
-          closeSessionsDrawer(true, gestureState.vx);
+          closeSessionsDrawer(false);
         },
         onPanResponderTerminate: () => {
           drawerGestureOpeningRef.current = false;
-          closeSessionsDrawer();
+          closeSessionsDrawer(false);
         },
         onPanResponderTerminationRequest: () => false,
       }),
@@ -437,11 +447,7 @@ export default function App() {
       windowWidth,
     ]
   );
-  const chatSceneTranslateX = sessionDrawerTranslateX.interpolate({
-    inputRange: [-sessionDrawerWidth, 0],
-    outputRange: [0, sessionDrawerWidth],
-    extrapolate: 'clamp',
-  });
+  const chatSceneTranslateX = 0;
   const settingsContentTranslateX = settingsContentProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [settingsContentMotion === 'rootEnter' ? -28 : 34, 0],
@@ -495,9 +501,44 @@ export default function App() {
             selected && [styles.drawerSessionItemSelected, { backgroundColor: theme.primarySoft }],
             { borderBottomColor: active ? theme.primary : theme.divider },
           ]}
-          onPress={() => openConversation(conversation.id)}
+          onPress={() => {
+            if (suppressNextSessionPressRef.current === conversation.id) {
+              suppressNextSessionPressRef.current = null;
+              if (suppressNextSessionPressTimerRef.current) {
+                clearTimeout(suppressNextSessionPressTimerRef.current);
+                suppressNextSessionPressTimerRef.current = null;
+              }
+              return;
+            }
+            openConversation(conversation.id);
+          }}
+          onPressOut={() => {
+            if (suppressNextSessionPressRef.current !== conversation.id) {
+              return;
+            }
+            if (suppressNextSessionPressTimerRef.current) {
+              clearTimeout(suppressNextSessionPressTimerRef.current);
+            }
+            suppressNextSessionPressTimerRef.current = setTimeout(() => {
+              if (suppressNextSessionPressRef.current === conversation.id) {
+                suppressNextSessionPressRef.current = null;
+              }
+              suppressNextSessionPressTimerRef.current = null;
+            }, 180);
+          }}
           onLongPress={() => {
             if (!sessionSelectionMode) {
+              triggerLongPressHaptic();
+              suppressNextSessionPressRef.current = conversation.id;
+              if (suppressNextSessionPressTimerRef.current) {
+                clearTimeout(suppressNextSessionPressTimerRef.current);
+              }
+              suppressNextSessionPressTimerRef.current = setTimeout(() => {
+                if (suppressNextSessionPressRef.current === conversation.id) {
+                  suppressNextSessionPressRef.current = null;
+                }
+                suppressNextSessionPressTimerRef.current = null;
+              }, 10000);
               setSessionContextMenuId(conversation.id);
             }
           }}
@@ -600,12 +641,33 @@ export default function App() {
   }, [persisted.activeConversationId, persisted.conversations, ready]);
 
   useEffect(() => {
+    const listenerId = sessionDrawerTranslateX.addListener(({ value }) => {
+      sessionDrawerDragTargetRef.current = clampNumber(value, -sessionDrawerHiddenOffsetRef.current, 0);
+    });
+
+    return () => {
+      sessionDrawerTranslateX.removeListener(listenerId);
+    };
+  }, [sessionDrawerTranslateX]);
+
+  useEffect(() => {
     if (sessionsVisible || drawerGestureOpeningRef.current) {
       return;
     }
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
+    sessionDrawerAnimationIdRef.current += 1;
+    sessionDrawerTranslateX.stopAnimation();
+    mainSceneTranslateX.stopAnimation();
     sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
     sessionDrawerDragTargetRef.current = -sessionDrawerHiddenOffsetRef.current;
-  }, [sessionDrawerTranslateX, sessionsVisible, windowWidth]);
+    mainSceneTranslateX.setValue(0);
+  }, [mainSceneTranslateX, sessionDrawerTranslateX, sessionsVisible, windowWidth]);
+
+  function getMainSceneXForDrawer(drawerX: number) {
+    void drawerX;
+    return 0;
+  }
 
   function setSessionDrawerPosition(nextX: number) {
     sessionDrawerDragTargetRef.current = nextX;
@@ -614,7 +676,10 @@ export default function App() {
     }
     sessionDrawerDragFrameRef.current = requestAnimationFrame(() => {
       sessionDrawerDragFrameRef.current = null;
-      sessionDrawerTranslateX.setValue(sessionDrawerDragTargetRef.current);
+      const drawerX = clampNumber(sessionDrawerDragTargetRef.current, -sessionDrawerHiddenOffsetRef.current, 0);
+      sessionDrawerDragTargetRef.current = drawerX;
+      sessionDrawerTranslateX.setValue(drawerX);
+      mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX));
     });
   }
 
@@ -625,11 +690,74 @@ export default function App() {
     }
   }
 
+  function cancelSessionDrawerSettleFrame() {
+    if (sessionDrawerSettleFrameRef.current !== null) {
+      cancelAnimationFrame(sessionDrawerSettleFrameRef.current);
+      sessionDrawerSettleFrameRef.current = null;
+    }
+  }
+
+  function cancelSessionDrawerSnapTimer() {
+    if (sessionDrawerSnapTimerRef.current) {
+      clearTimeout(sessionDrawerSnapTimerRef.current);
+      sessionDrawerSnapTimerRef.current = null;
+    }
+  }
+
+  function forceSessionDrawerState(open: boolean) {
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
+    sessionDrawerAnimationIdRef.current += 1;
+    sessionDrawerClosingRef.current = false;
+    drawerGestureOpeningRef.current = false;
+    sessionDrawerTranslateX.stopAnimation();
+    mainSceneTranslateX.stopAnimation();
+    const drawerX = open ? 0 : -sessionDrawerHiddenOffsetRef.current;
+    sessionDrawerDragTargetRef.current = drawerX;
+    sessionDrawerTranslateX.setValue(drawerX);
+    mainSceneTranslateX.setValue(0);
+    setSessionsVisible(open);
+    if (!open) {
+      setSessionSelectionMode(false);
+      setSelectedSessionIds([]);
+      setSessionSearchVisible(false);
+      setSessionSearchQuery('');
+      setSessionSearchRaised(false);
+    }
+  }
+
+  function scheduleSessionDrawerSnap(delay = 380) {
+    cancelSessionDrawerSnapTimer();
+    sessionDrawerSnapTimerRef.current = setTimeout(() => {
+      sessionDrawerSnapTimerRef.current = null;
+      if (!sessionsVisibleRef.current && !drawerGestureOpeningRef.current) {
+        forceSessionDrawerState(false);
+        return;
+      }
+      const drawerX = clampNumber(sessionDrawerDragTargetRef.current, -sessionDrawerHiddenOffsetRef.current, 0);
+      const openProgress = 1 + drawerX / sessionDrawerHiddenOffsetRef.current;
+      if (openProgress <= 0.02) {
+        forceSessionDrawerState(false);
+        return;
+      }
+      if (openProgress >= 0.98) {
+        forceSessionDrawerState(true);
+        return;
+      }
+      if (openProgress >= 0.5) {
+        openSessionsDrawer();
+        return;
+      }
+      closeSessionsDrawer(true);
+    }, delay);
+  }
+
   function flushSessionDrawerDragPosition() {
     cancelSessionDrawerDragFrame();
     const nextX = clampNumber(sessionDrawerDragTargetRef.current, -sessionDrawerHiddenOffsetRef.current, 0);
     sessionDrawerDragTargetRef.current = nextX;
     sessionDrawerTranslateX.setValue(nextX);
+    mainSceneTranslateX.setValue(getMainSceneXForDrawer(nextX));
     return nextX;
   }
 
@@ -649,6 +777,8 @@ export default function App() {
       velocity
     );
     sessionDrawerDragTargetRef.current = toValue;
+    mainSceneTranslateX.stopAnimation();
+    mainSceneTranslateX.setValue(0);
     Animated.timing(sessionDrawerTranslateX, {
       toValue,
       duration,
@@ -660,6 +790,7 @@ export default function App() {
       }
       sessionDrawerTranslateX.setValue(toValue);
       sessionDrawerDragTargetRef.current = toValue;
+      mainSceneTranslateX.setValue(0);
       onComplete?.();
     });
     return duration;
@@ -855,6 +986,15 @@ export default function App() {
         cancelAnimationFrame(sessionDrawerDragFrameRef.current);
         sessionDrawerDragFrameRef.current = null;
       }
+      if (sessionDrawerSettleFrameRef.current !== null) {
+        cancelAnimationFrame(sessionDrawerSettleFrameRef.current);
+        sessionDrawerSettleFrameRef.current = null;
+      }
+      cancelSessionDrawerSnapTimer();
+      if (suppressNextSessionPressTimerRef.current) {
+        clearTimeout(suppressNextSessionPressTimerRef.current);
+        suppressNextSessionPressTimerRef.current = null;
+      }
       if (settingsPanelCloseFallbackRef.current) {
         clearTimeout(settingsPanelCloseFallbackRef.current);
       }
@@ -869,8 +1009,9 @@ export default function App() {
         clearTimeout(composerKeyboardResetTimerRef.current);
         composerKeyboardResetTimerRef.current = null;
       }
+      mainSceneTranslateX.stopAnimation();
     },
-    []
+    [mainSceneTranslateX]
   );
 
   useEffect(() => {
@@ -1330,6 +1471,24 @@ export default function App() {
     resetApiProfileEditor(profile);
     navigateToSettingsSection('api');
     loadProfileApiKey(profile.id).then(setApiKey).catch(() => setApiKey(''));
+  }
+
+  async function openApiProfileEditorFromPicker(profile: ApiProfile) {
+    const key = await loadProfileApiKey(profile.id).catch(() => '');
+    closeBottomSheet(true, () => {
+      settingsReturnTargetRef.current = 'chat';
+      setChatMenuVisible(false);
+      setSessionsVisible(false);
+      setDraftProfile(profile);
+      resetApiProfileEditor(profile);
+      setApiKey(key);
+      setSettingsSection('api');
+      setSettingsContentMotion('forward');
+      settingsContentProgress.setValue(1);
+      settingsPanelTranslateX.stopAnimation();
+      settingsPanelTranslateX.setValue(0);
+      setSettingsVisible(true);
+    });
   }
 
   async function selectDraftApiProfile(profile: ApiProfile) {
@@ -2369,66 +2528,30 @@ export default function App() {
   }
 
   function openSessionsDrawer(velocity = 0) {
-    const animationId = sessionDrawerAnimationIdRef.current + 1;
-    sessionDrawerAnimationIdRef.current = animationId;
-    sessionDrawerClosingRef.current = false;
+    void velocity;
+    cancelSessionDrawerSnapTimer();
     setChatMenuVisible(false);
     setAttachmentMenuVisible(false);
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
     if (sessionDrawerCloseFallbackRef.current) {
       clearTimeout(sessionDrawerCloseFallbackRef.current);
       sessionDrawerCloseFallbackRef.current = null;
     }
-    sessionDrawerTranslateX.stopAnimation();
-    if (!sessionsVisible) {
-      cancelSessionDrawerDragFrame();
-      sessionDrawerDragTargetRef.current = -sessionDrawerHiddenOffsetRef.current;
-      sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
-    }
-    setSessionsVisible(true);
-    requestAnimationFrame(() => {
-      animateSessionDrawerTo(0, animationId, velocity);
-    });
+    forceSessionDrawerState(true);
   }
 
   function closeSessionsDrawer(animate = true, velocity = 0) {
-    const animationId = sessionDrawerAnimationIdRef.current + 1;
-    sessionDrawerAnimationIdRef.current = animationId;
-    sessionDrawerClosingRef.current = animate;
-    drawerGestureOpeningRef.current = false;
+    void animate;
+    void velocity;
+    cancelSessionDrawerSnapTimer();
     if (sessionDrawerCloseFallbackRef.current) {
       clearTimeout(sessionDrawerCloseFallbackRef.current);
+      sessionDrawerCloseFallbackRef.current = null;
     }
-    sessionDrawerTranslateX.stopAnimation();
-    const finishClose = () => {
-      if (sessionDrawerAnimationIdRef.current !== animationId) {
-        return;
-      }
-      if (sessionDrawerCloseFallbackRef.current) {
-        clearTimeout(sessionDrawerCloseFallbackRef.current);
-        sessionDrawerCloseFallbackRef.current = null;
-      }
-      sessionDrawerClosingRef.current = false;
-      sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
-      sessionDrawerDragTargetRef.current = -sessionDrawerHiddenOffsetRef.current;
-      setSessionsVisible(false);
-      setSessionSelectionMode(false);
-      setSelectedSessionIds([]);
-      setSessionSearchVisible(false);
-      setSessionSearchQuery('');
-      setSessionSearchRaised(false);
-    };
-    if (!animate) {
-      cancelSessionDrawerDragFrame();
-      finishClose();
-      return;
-    }
-    const duration = animateSessionDrawerTo(
-      -sessionDrawerHiddenOffsetRef.current,
-      animationId,
-      velocity,
-      finishClose
-    );
-    sessionDrawerCloseFallbackRef.current = setTimeout(finishClose, duration + 120);
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
+    forceSessionDrawerState(false);
   }
 
   function openSettingsFromSessions() {
@@ -2813,14 +2936,14 @@ export default function App() {
 
           <DrawerGestureContext.Provider value={drawerGestureContextValue}>
           <View style={styles.chatShell}>
-            {!sessionsVisible && !settingsVisible && !modelPickerVisible && !chatMenuVisible && (
-              <View
-                pointerEvents="box-only"
-                style={[styles.drawerOpenEdge, { width: Math.min(windowWidth * 0.1, DRAWER_OPEN_EDGE_WIDTH) }]}
-                {...chatOpenDrawerPanResponder.panHandlers}
-              />
-            )}
             <View style={styles.chatScrollWrap}>
+              {!settingsVisible && !modelPickerVisible && !chatMenuVisible && (
+                <View
+                  pointerEvents="box-only"
+                  style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}
+                  {...chatOpenDrawerPanResponder.panHandlers}
+                />
+              )}
               <ScrollView
                 ref={scrollRef}
                 style={styles.chatScroll}
@@ -2895,8 +3018,10 @@ export default function App() {
                 <Pressable
                   style={[
                     styles.attachButton,
-                    { backgroundColor: theme.surfaceAlt, borderColor: attachmentMenuVisible ? theme.primary : theme.border },
-                    attachmentMenuVisible && styles.attachButtonActive,
+                    {
+                      backgroundColor: attachmentMenuVisible ? theme.primarySoft : theme.surfaceAlt,
+                      borderColor: attachmentMenuVisible ? theme.primary : theme.border,
+                    },
                   ]}
                   onPress={() => setAttachmentMenuVisible((visible) => !visible)}
                   disabled={composerDisabled}
@@ -2978,7 +3103,8 @@ export default function App() {
       </SafeAreaView>
       </Animated.View>
 
-      <Modal visible={settingsVisible} animationType="none" onRequestClose={goBackFromSettings}>
+      <Modal visible={settingsVisible} animationType="none" transparent statusBarTranslucent onRequestClose={goBackFromSettings}>
+        <View style={[styles.settingsModalRoot, { backgroundColor: theme.surface }]}>
         <Animated.View
           style={[styles.settingsScreen, { backgroundColor: theme.surface, transform: [{ translateX: settingsPanelTranslateX }] }]}
           onStartShouldSetResponderCapture={() => false}
@@ -3432,6 +3558,7 @@ export default function App() {
             </ScrollView>
           </SafeAreaView>
         </Animated.View>
+        </View>
       </Modal>
 
       <Modal visible={modelPickerVisible} animationType="none" transparent onRequestClose={() => closeBottomSheet()}>
@@ -3439,7 +3566,7 @@ export default function App() {
           <Animated.View style={[styles.modalBackdropLayer, { opacity: bottomSheetBackdropOpacity }]} />
           <Pressable style={styles.modalDismissArea} onPress={() => closeBottomSheet()} />
           <Animated.View style={[styles.modalCardCompact, { backgroundColor: theme.surface, borderColor: theme.border, transform: [{ translateY: bottomSheetTranslateY }] }]}>
-            <View style={styles.sessionHeader}>
+            <View style={styles.modelPickerHeader}>
               <View style={styles.modalHeading}>
                 <Text style={[styles.modalTitle, { color: theme.text }]}>{copy.modelPickerTitle}</Text>
               </View>
@@ -3450,10 +3577,10 @@ export default function App() {
                 }}
                 disabled={fetchingModels}
               >
-                <Text style={styles.modalPrimaryText}>{fetchingModels ? copy.fetchingModels : copy.fetchModels}</Text>
+                <Text style={styles.modalPrimaryText} numberOfLines={1}>{fetchingModels ? copy.fetchingModels : copy.fetchModels}</Text>
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileChipRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.profileChipRow, styles.modelProfileChipRow]}>
               {persisted.profiles.map((profile) => {
                 const active = profile.id === persisted.activeProfileId;
                 return (
@@ -3461,11 +3588,16 @@ export default function App() {
                     key={profile.id}
                     style={[
                       styles.profileChip,
+                      styles.modelProfileChip,
                       themedPanel,
                       active && [styles.profileChipSelected, themedSelected],
                     ]}
                     onPress={() => {
                       void switchActiveApiProfile(profile.id);
+                    }}
+                    onLongPress={() => {
+                      triggerLongPressHaptic();
+                      void openApiProfileEditorFromPicker(profile);
                     }}
                   >
                     <Text style={[styles.profileChipTitle, { color: theme.text }, active && { color: theme.primary }]}>
@@ -3560,8 +3692,10 @@ export default function App() {
                   <Pressable
                     style={[
                       styles.drawerIconButton,
-                      { backgroundColor: theme.surface, borderColor: sessionSearchVisible ? theme.primary : theme.border },
-                      sessionSearchVisible && styles.drawerIconButtonActive,
+                      {
+                        backgroundColor: sessionSearchVisible ? theme.primarySoft : theme.surface,
+                        borderColor: sessionSearchVisible ? theme.primary : theme.border,
+                      },
                     ]}
                     onPress={toggleSessionSearch}
                     accessibilityRole="button"
@@ -4040,10 +4174,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  attachButtonActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
-  },
   attachOptionRow: {
     flexDirection: 'row',
     gap: 10,
@@ -4253,6 +4383,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  settingsModalRoot: {
+    flex: 1,
+  },
   settingsScreenSafe: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -4396,10 +4529,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  drawerIconButtonActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
-  },  drawerHeaderButton: {
+  drawerHeaderButton: {
     minHeight: 36,
     borderRadius: 18,
     borderWidth: 1,
@@ -4772,6 +4902,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  modelProfileChip: {
+    width: 112,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  modelProfileChipRow: {
+    paddingTop: 12,
+  },
   profileChipSelected: {
     borderColor: '#60A5FA',
     backgroundColor: '#EFF6FF',
@@ -5059,7 +5199,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modelFetchButton: {
-    minHeight: 46,
+    minHeight: 42,
+    maxWidth: '58%',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    flexShrink: 0,
   },
   modalPrimaryText: {
     color: '#FFFFFF',
@@ -5069,6 +5214,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  modelPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 2,
   },
   emptySessionText: {
     color: '#64748B',

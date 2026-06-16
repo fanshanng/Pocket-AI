@@ -48,6 +48,9 @@ type HorizontalScrollableProps = {
   onHorizontalGestureEnd?: () => void;
 };
 
+const TABLE_MIN_COLUMN_WIDTH = 104;
+const TABLE_MAX_ESTIMATED_WIDTH = 7200;
+
 const markdownIt = new MarkdownIt({
   breaks: true,
   html: false,
@@ -229,7 +232,11 @@ export function extractCodeBlocks(text: string): string[] {
   let match: RegExpExecArray | null;
 
   while ((match = pattern.exec(normalized))) {
-    blocks.push(match[4].replace(/\n$/, ''));
+    const language = match[3].trim().split(/\s+/)[0] || '';
+    const code = match[4].replace(/\n$/, '');
+    if (!shouldRenderFenceAsMath(language, code)) {
+      blocks.push(code);
+    }
   }
 
   return blocks;
@@ -268,15 +275,39 @@ function getTokenLanguage(token: MarkdownItToken): string {
   return token.info.trim().split(/\s+/)[0] || '';
 }
 
+function isMathFenceLanguage(language: string): boolean {
+  const normalized = language.trim().toLowerCase().replace(/^language-/, '');
+  return normalized === 'latex' || normalized === 'tex' || normalized === 'math' || normalized === 'katex';
+}
+
+function looksLikeLatexMath(code: string): boolean {
+  const trimmed = code.trim();
+  if (!trimmed) return false;
+  if (/\\(?:documentclass|usepackage|begin\{document\}|end\{document\})\b/.test(trimmed)) {
+    return false;
+  }
+  return /\\(?:frac|sqrt|int|sum|prod|lim|exp|log|sin|cos|tan|sigma|mu|pi|infty|cdot|times|mathbb|mathbf|mathrm|operatorname|left|right|begin\{(?:aligned|align|matrix|pmatrix|bmatrix|cases)\})\b/.test(trimmed)
+    || /(?:\^|_)\s*\{/.test(trimmed);
+}
+
+function shouldRenderFenceAsMath(language: string, code: string): boolean {
+  return isMathFenceLanguage(language) && looksLikeLatexMath(code);
+}
+
 function extractCodeBlocksFromTokens(tokens: MarkdownItToken[]): CodeBlockData[] {
   const blocks: CodeBlockData[] = [];
 
   function visit(tokenList: MarkdownItToken[]) {
     for (const token of tokenList) {
       if (token.type === 'fence' || token.type === 'code_block') {
+        const code = token.content.replace(/\n$/, '');
+        const language = token.type === 'fence' ? getTokenLanguage(token) : '';
+        if (shouldRenderFenceAsMath(language, code)) {
+          continue;
+        }
         blocks.push({
-          code: token.content.replace(/\n$/, ''),
-          language: token.type === 'fence' ? getTokenLanguage(token) : '',
+          code,
+          language,
         });
       }
 
@@ -547,10 +578,15 @@ function HorizontalScrollable({
   children,
   style,
   contentContainerStyle,
+  contentWidth,
   onHorizontalGestureStart,
   onHorizontalGestureEnd,
 }: HorizontalScrollableProps) {
   const lockedRef = useRef(false);
+  const forcedContentWidth =
+    typeof contentWidth === 'number' && Number.isFinite(contentWidth)
+      ? Math.max(1, Math.ceil(contentWidth))
+      : undefined;
 
   const beginLock = useCallback(() => {
     if (lockedRef.current) return;
@@ -575,7 +611,13 @@ function HorizontalScrollable({
         alwaysBounceVertical={false}
         showsHorizontalScrollIndicator
         style={[style, localStyles.scrollViewport]}
-        contentContainerStyle={[contentContainerStyle, localStyles.scrollContent]}
+        contentContainerStyle={[
+          contentContainerStyle,
+          localStyles.scrollContent,
+          forcedContentWidth
+            ? { width: forcedContentWidth, minWidth: forcedContentWidth }
+            : undefined,
+        ]}
         onTouchEnd={endLock}
         onTouchCancel={endLock}
         onScrollBeginDrag={beginLock}
@@ -587,6 +629,41 @@ function HorizontalScrollable({
       </ScrollView>
     </NativeViewGestureHandler>
   );
+}
+
+function countRenderedChildren(value: ReactNode): number {
+  return Array.isArray(value) ? value.filter(Boolean).length : value ? 1 : 0;
+}
+
+function getTableColumnCount(children: ReactNode): number {
+  const sections = Array.isArray(children) ? children : [children];
+
+  for (const section of sections) {
+    if (!section || typeof section !== 'object' || !('props' in section)) {
+      continue;
+    }
+
+    const sectionChildren = (section as { props?: { children?: ReactNode } }).props?.children;
+    const rows = Array.isArray(sectionChildren) ? sectionChildren : [sectionChildren];
+    for (const row of rows) {
+      if (!row || typeof row !== 'object' || !('props' in row)) {
+        continue;
+      }
+
+      const rowChildren = (row as { props?: { children?: ReactNode } }).props?.children;
+      const columnCount = countRenderedChildren(rowChildren);
+      if (columnCount > 0) {
+        return columnCount;
+      }
+    }
+  }
+
+  return 1;
+}
+
+function getEstimatedTableWidth(children: ReactNode): number {
+  const columnCount = getTableColumnCount(children);
+  return Math.min(TABLE_MAX_ESTIMATED_WIDTH, Math.max(320, columnCount * TABLE_MIN_COLUMN_WIDTH));
 }
 
 function EagerHorizontalScrollable({
@@ -744,39 +821,106 @@ function MarkdownBody({
     <Markdown
       mergeStyle
       rules={{
-        code_block: (node) => (
-          <CodeBlock
-            key={node.key}
-            code={getNodeContent(node)}
-            language={getNodeLanguage(node)}
-            deferHighlight={deferCodeHighlight}
-            colorScheme={colorScheme}
-            onHorizontalGestureStart={onHorizontalGestureStart}
-            onHorizontalGestureEnd={onHorizontalGestureEnd}
-          />
+        code_block: (node) => {
+          const code = getNodeContent(node);
+          const language = getNodeLanguage(node);
+          if (shouldRenderFenceAsMath(language, code)) {
+            return (
+              <BlockMathView
+                key={node.key}
+                math={code}
+                colorScheme={colorScheme}
+                onHorizontalGestureStart={onHorizontalGestureStart}
+                onHorizontalGestureEnd={onHorizontalGestureEnd}
+              />
+            );
+          }
+
+          return (
+            <CodeBlock
+              key={node.key}
+              code={code}
+              language={language}
+              deferHighlight={deferCodeHighlight}
+              colorScheme={colorScheme}
+              onHorizontalGestureStart={onHorizontalGestureStart}
+              onHorizontalGestureEnd={onHorizontalGestureEnd}
+            />
+          );
+        },
+        fence: (node) => {
+          const code = getNodeContent(node);
+          const language = getNodeLanguage(node);
+          if (shouldRenderFenceAsMath(language, code)) {
+            return (
+              <BlockMathView
+                key={node.key}
+                math={code}
+                colorScheme={colorScheme}
+                onHorizontalGestureStart={onHorizontalGestureStart}
+                onHorizontalGestureEnd={onHorizontalGestureEnd}
+              />
+            );
+          }
+
+          return (
+            <CodeBlock
+              key={node.key}
+              code={code}
+              language={language}
+              deferHighlight={deferCodeHighlight}
+              colorScheme={colorScheme}
+              onHorizontalGestureStart={onHorizontalGestureStart}
+              onHorizontalGestureEnd={onHorizontalGestureEnd}
+            />
+          );
+        },
+        table: (node, children) => {
+          const tableWidth = getEstimatedTableWidth(children);
+
+          return (
+            <HorizontalScrollable
+              key={node.key}
+              style={dynamicStyles.tableWrap}
+              contentContainerStyle={dynamicStyles.tableScrollContent}
+              contentWidth={tableWidth}
+              onHorizontalGestureStart={onHorizontalGestureStart}
+              onHorizontalGestureEnd={onHorizontalGestureEnd}
+            >
+              <View style={[dynamicStyles.table, { width: tableWidth, minWidth: tableWidth }]}>
+                {children}
+              </View>
+            </HorizontalScrollable>
+          );
+        },
+        th: (node, children) => (
+          <View key={node.key} style={dynamicStyles.th}>
+            {children}
+          </View>
         ),
-        fence: (node) => (
-          <CodeBlock
-            key={node.key}
-            code={getNodeContent(node)}
-            language={getNodeLanguage(node)}
-            deferHighlight={deferCodeHighlight}
-            colorScheme={colorScheme}
-            onHorizontalGestureStart={onHorizontalGestureStart}
-            onHorizontalGestureEnd={onHorizontalGestureEnd}
-          />
+        td: (node, children) => (
+          <View key={node.key} style={dynamicStyles.td}>
+            {children}
+          </View>
         ),
-        table: (node, children) => (
-          <HorizontalScrollable
-            key={node.key}
-            style={dynamicStyles.tableWrap}
-            contentContainerStyle={dynamicStyles.tableScrollContent}
-            onHorizontalGestureStart={onHorizontalGestureStart}
-            onHorizontalGestureEnd={onHorizontalGestureEnd}
-          >
-            <View style={dynamicStyles.table}>{children}</View>
-          </HorizontalScrollable>
-        ),
+        text: (node, _children, parent) => {
+          const content = getNodeContent(node);
+          const insideTableCell = Array.isArray(parent)
+            && parent.some((item) => item && typeof item === 'object' && 'type' in item && ((item as { type?: string }).type === 'td' || (item as { type?: string }).type === 'th'));
+
+          return (
+            <Text
+              key={node.key}
+              selectable
+              style={[
+                dynamicStyles.text,
+                insideTableCell && dynamicStyles.tableCellText,
+              ]}
+            >
+              {content}
+            </Text>
+          );
+        },
         math_inline: (node) => (
           <InlineMathText
             key={node.key}
@@ -1003,7 +1147,6 @@ function createMarkdownStyles(colorScheme: 'light' | 'dark' = 'light') {
       flexGrow: 1,
     },
     table: {
-      minWidth: 320,
       alignSelf: 'flex-start',
     },
     thead: {
@@ -1011,13 +1154,16 @@ function createMarkdownStyles(colorScheme: 'light' | 'dark' = 'light') {
     },
     tbody: {},
     th: {
-      minWidth: 88,
+      minWidth: TABLE_MIN_COLUMN_WIDTH,
+      flexBasis: TABLE_MIN_COLUMN_WIDTH,
+      flexGrow: 1,
       flexShrink: 0,
       paddingHorizontal: 10,
       paddingVertical: 8,
       borderRightWidth: 1,
       borderBottomWidth: 1,
       borderColor: border,
+      alignItems: 'center',
       justifyContent: 'center',
     },
     tr: {
@@ -1027,13 +1173,20 @@ function createMarkdownStyles(colorScheme: 'light' | 'dark' = 'light') {
       alignItems: 'stretch',
     },
     td: {
-      minWidth: 88,
+      minWidth: TABLE_MIN_COLUMN_WIDTH,
+      flexBasis: TABLE_MIN_COLUMN_WIDTH,
+      flexGrow: 1,
       flexShrink: 0,
       paddingHorizontal: 10,
       paddingVertical: 8,
       borderRightWidth: 1,
       borderColor: rowBorder,
+      alignItems: 'center',
       justifyContent: 'center',
+    },
+    tableCellText: {
+      width: '100%',
+      textAlign: 'center',
     },
     text: {
       color: text,

@@ -20,6 +20,7 @@ import { LongPressGestureHandler, State, type LongPressGestureHandlerStateChange
 
 import { applyContentPlugins } from '../plugins';
 import type { AttachmentRecord, ChatMessage, UiLanguage } from '../types';
+import { triggerLongPressHaptic } from '../lib/haptics';
 import { useDrawerGesture } from './DrawerGestureContext';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -214,6 +215,7 @@ function MessageBubbleComponent({
       return;
     }
     if (event.nativeEvent.state === State.ACTIVE) {
+      triggerLongPressHaptic();
       openActionMenu();
     }
   }
