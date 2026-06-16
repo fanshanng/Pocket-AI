@@ -37,6 +37,7 @@ import {
   FileText,
   Image as ImageIcon,
   Maximize2,
+  RefreshCw,
   X,
 } from 'lucide-react-native';
 
@@ -1934,10 +1935,10 @@ export default function App() {
         ]}
         onPress={() => applyModelToActiveProfile(model)}
       >
-        <Text style={[styles.modelOptionText, { color: theme.text }, active && { color: theme.primary }]} numberOfLines={1}>
+        <Text style={[styles.modelOptionText, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
           {model}
         </Text>
-        {active && <Text style={styles.profileStateActive}>{copy.activeModel}</Text>}
+        {active && <Text style={[styles.modelOptionState, themedSelectedText]} numberOfLines={1}>{copy.activeModel}</Text>}
       </Pressable>
     );
   }
@@ -3568,8 +3569,10 @@ export default function App() {
           <Pressable style={styles.modalDismissArea} onPress={() => closeBottomSheet()} />
           <Animated.View style={[styles.modalCardCompact, { backgroundColor: theme.surface, borderColor: theme.border, transform: [{ translateY: bottomSheetTranslateY }] }]}>
             <View style={styles.modelPickerHeader}>
-              <View style={styles.modalHeading}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>{copy.modelPickerTitle}</Text>
+              <View style={[styles.modalHeading, styles.modelPickerHeading]}>
+                <Text style={[styles.modalTitle, styles.modelPickerTitle, { color: theme.text }]} numberOfLines={1}>
+                  {copy.modelPickerTitle}
+                </Text>
               </View>
               <Pressable
                 style={[styles.modalPrimarySmall, styles.modelFetchButton, fetchingModels && styles.disabledAction]}
@@ -3578,7 +3581,10 @@ export default function App() {
                 }}
                 disabled={fetchingModels}
               >
-                <Text style={styles.modalPrimaryText} numberOfLines={1}>{fetchingModels ? copy.fetchingModels : copy.fetchModels}</Text>
+                <RefreshCw size={15} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={[styles.modalPrimaryText, styles.modelFetchButtonText]} numberOfLines={1}>
+                  {fetchingModels ? copy.fetchingModels : copy.fetchModels}
+                </Text>
               </Pressable>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.profileChipRow, styles.modelProfileChipRow]}>
@@ -3601,10 +3607,10 @@ export default function App() {
                       void openApiProfileEditorFromPicker(profile);
                     }}
                   >
-                    <Text style={[styles.profileChipTitle, { color: theme.text }, active && themedSelectedText]}>
+                    <Text style={[styles.profileChipTitle, styles.modelProfileChipTitle, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
                       {profile.label}
                     </Text>
-                    <Text style={[styles.profileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
+                    <Text style={[styles.profileChipMeta, styles.modelProfileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
                       {active ? copy.activeApiProfile : profile.model}
                     </Text>
                   </Pressable>
@@ -4424,6 +4430,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 12,
   },
+  modelPickerHeading: {
+    minWidth: 0,
+    paddingRight: 0,
+  },
+  modelPickerTitle: {
+    flexShrink: 1,
+  },
   modalSubtitle: {
     color: '#64748B',
     marginTop: 8,
@@ -4730,6 +4743,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   modelListContent: {
+    paddingTop: 2,
     paddingBottom: 10,
   },
   modelOption: {
@@ -4753,6 +4767,13 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#111827',
     fontSize: 15,
+    fontWeight: '800',
+    minWidth: 0,
+  },
+  modelOptionState: {
+    flexShrink: 0,
+    color: '#1D4ED8',
+    fontSize: 12,
     fontWeight: '800',
   },  renameInput: {
     marginTop: 16,
@@ -4904,14 +4925,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   modelProfileChip: {
-    width: 112,
-    minHeight: 48,
+    minWidth: 126,
+    maxWidth: 158,
+    minHeight: 54,
     borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    justifyContent: 'center',
   },
   modelProfileChipRow: {
     paddingTop: 12,
+    paddingRight: 2,
   },
   profileChipSelected: {
     borderColor: '#60A5FA',
@@ -4921,11 +4945,18 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 13,
     fontWeight: '800',
+  },
+  modelProfileChipTitle: {
+    minWidth: 0,
   },  profileChipMeta: {
     color: '#64748B',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 5,
+  },
+  modelProfileChipMeta: {
+    minWidth: 0,
+    marginTop: 4,
   },  settingsGroupCard: {
     borderRadius: 20,
     borderWidth: 1,
@@ -5201,15 +5232,23 @@ const styles = StyleSheet.create({
   },
   modelFetchButton: {
     minHeight: 42,
-    maxWidth: '58%',
+    minWidth: 136,
+    maxWidth: 174,
     borderRadius: 999,
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 9,
     flexShrink: 0,
+    flexDirection: 'row',
+    gap: 7,
   },
   modalPrimaryText: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  modelFetchButtonText: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 13,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -5218,10 +5257,10 @@ const styles = StyleSheet.create({
   },
   modelPickerHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 2,
+    gap: 10,
+    marginBottom: 4,
   },
   emptySessionText: {
     color: '#64748B',

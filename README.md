@@ -23,9 +23,9 @@ Pocket AI 是一个 Android 本地优先 AI 聊天应用，基于 Expo / React N
 - v1.2.0：https://github.com/fanshanng/Pocket-AI/releases/tag/v1.2.0
 
 - 包名：`com.fanshanng.aichatpocket`
-- 当前版本：`1.2.2`
+- 当前版本：`1.2.3`
 - APK 文件：`app-release.apk`
-- v1.2.2 APK SHA256：`874671F780467DCED915D91F49CCD153773CFD8275976D03A5536EB48B0233C0`
+- v1.2.3 APK SHA256：`578EADA54C79F6E9FC00322485FCB57D9701DE1F7FD1751BEBE863F8D8A41BC5`
 - 上一个已验证 APK：v1.2.0 `448A8F45C7D894FF463E1C9EEB000A38AD0E836C6C3DCDE2A549439AA4C82D3A`
 
 首次安装需要在 Android 系统中允许从浏览器或文件管理器安装未知来源应用。
