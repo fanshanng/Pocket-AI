@@ -22,6 +22,7 @@ const messageBubble = read('src/components/MessageBubble.tsx');
 const codeBlock = read('src/components/CodeBlock.tsx');
 const pendingAttachmentBar = read('src/components/PendingAttachmentBar.tsx');
 const modelPickerContent = read('src/components/ModelPickerContent.tsx');
+const profileDrafts = read('src/lib/profileDrafts.ts');
 const conversations = read('src/lib/conversations.ts');
 const drawerGestures = read('src/lib/drawerGestures.ts');
 const openai = read('src/lib/openai.ts');
@@ -164,7 +165,16 @@ check(app.includes('refreshAttachmentCacheStats'), 'Attachment cache stats refre
 check(app.includes('copy.attachmentCacheStats'), 'Attachment cache stats display missing');
 check(app.includes('Let users clear a preset URL before pasting a replacement'), 'API Base URL editor should allow temporary empty values');
 check(app.includes('requireBaseUrl?: boolean'), 'API profile save should expose an explicit Base URL requirement');
+check(app.includes('hasDraftBaseUrl(draft)'), 'API profile save should use editable draft Base URL guard');
+check(app.includes('sanitizeEditableProfileDraft(updated)'), 'API draft updates should use editable draft sanitization');
 check(app.includes('copy.baseUrlRequiredMessage'), 'API Base URL required prompt missing');
+check(profileDrafts.includes('export function hasDraftBaseUrl'), 'API draft Base URL helper missing');
+check(profileDrafts.includes('export function sanitizeEditableProfileDraft'), 'API editable draft sanitizer missing');
+check(
+  profileDrafts.includes('baseUrl: hasDraftBaseUrl(profile) ? sanitized.baseUrl : profile.baseUrl'),
+  'API editable draft sanitizer should preserve temporary empty Base URL values'
+);
+check(profileDrafts.includes('persisted profiles still use sanitizeProfile'), 'API draft sanitizer audit comment missing');
 check(files.includes('export type AttachmentCacheStats'), 'Attachment cache stats type missing');
 check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachment cache stats should read the attachment directory');
 check(files.includes('referencedFileCount'), 'Attachment cache stats should include referenced attachment count');

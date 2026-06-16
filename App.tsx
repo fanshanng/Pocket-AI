@@ -147,6 +147,10 @@ import {
   upsertProfile,
 } from './src/lib/profiles';
 import {
+  hasDraftBaseUrl,
+  sanitizeEditableProfileDraft,
+} from './src/lib/profileDrafts';
+import {
   hasKeyboardInsetsBridge,
   startKeyboardInsetsTracking,
   subscribeKeyboardInsets,
@@ -1611,7 +1615,7 @@ export default function App() {
 
   async function persistDraftApiProfile(options: { refetchModels?: boolean; profile?: ApiProfile; key?: string; requireBaseUrl?: boolean } = {}) {
     const draft = options.profile ?? draftProfileRef.current;
-    if (!draft.baseUrl.trim()) {
+    if (!hasDraftBaseUrl(draft)) {
       // Let users clear a preset URL before pasting a replacement; saved profiles and network actions still require a URL.
       if (options.requireBaseUrl) {
         Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
@@ -1720,13 +1724,7 @@ export default function App() {
     setReasoningEffortsFetched(false);
     setDraftProfile((current) => {
       const updated = updater(current);
-      const next = sanitizeProfile(updated);
-      return {
-        ...next,
-        baseUrl: updated.baseUrl.trim() ? next.baseUrl : updated.baseUrl,
-        cachedModels: getCachedModelsForProfile(next),
-        cachedReasoningEfforts: getCachedReasoningEffortsForProfile(next),
-      };
+      return sanitizeEditableProfileDraft(updated);
     });
   }
 
@@ -1790,7 +1788,7 @@ export default function App() {
   }
 
   async function handleTestApiProfile() {
-    if (!draftProfile.baseUrl.trim()) {
+    if (!hasDraftBaseUrl(draftProfile)) {
       Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
       return;
     }
@@ -1891,7 +1889,7 @@ export default function App() {
   }
 
   async function fetchModelsForProfile(profile: ApiProfile = activeProfile, key = apiKey) {
-    if (!profile.baseUrl.trim()) {
+    if (!hasDraftBaseUrl(profile)) {
       Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
       return;
     }
@@ -1928,7 +1926,7 @@ export default function App() {
   }
 
   async function fetchModelsForDraftProfile() {
-    if (!draftProfile.baseUrl.trim()) {
+    if (!hasDraftBaseUrl(draftProfile)) {
       Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
       return;
     }

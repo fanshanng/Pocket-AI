@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.20` / Android `versionCode 55`.
+- Current version: `1.2.21` / Android `versionCode 56`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -72,6 +72,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.18 extracts the pending attachment chip rail into `src/components/PendingAttachmentBar.tsx` as the first low-risk presentational split from `App.tsx`; attachment behavior is unchanged.
 - v1.2.19 extracts the model picker header, API profile chips, and model list into `src/components/ModelPickerContent.tsx` while leaving bottom-sheet animation and model/profile state in `App.tsx`; picker behavior is unchanged.
 - v1.2.20 fixes API Base URL editing so clearing a preset URL no longer immediately restores the default while the user is replacing it; saved profiles and network actions still require a non-empty URL.
+- v1.2.21 extracts editable API profile draft helpers into `src/lib/profileDrafts.ts` so Base URL draft behavior is guarded outside `App.tsx`; UI and request behavior are unchanged.
 
 ## Key Files
 
@@ -91,6 +92,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - Accepts an optional `AbortSignal` so generation can be stopped.
   - Accepts `onTextDelta` for real-time streaming text updates.
   - Collects downloadable image/document URLs from assistant output and saves them as attachments.
+- `src/lib/profileDrafts.ts`
+  - Pure helpers for editable API profile drafts, including the temporary empty Base URL state used while replacing preset URLs.
 - `src/lib/files.ts`
   - Attachment picking/copying/cleanup.
   - Remote URL attachment download helpers.
@@ -213,7 +216,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.20 APK SHA-256:
+Current v1.2.21 APK SHA-256:
+
+```text
+5267DD35DD44520C2A80BCA5199A03AC9B15666226C7CAB4D46CB6034FA32F98
+```
+
+Previous v1.2.20 APK SHA-256:
 
 ```text
 3D82EEAFEDAB29FE889FD267D6C5B7CA409C30B0C8A468A8E77659EAC414EC96
