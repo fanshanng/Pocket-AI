@@ -466,6 +466,10 @@ export default function App() {
   const sessionSearchNeedsRaise = sessionSearchQuery.length > 28 || sessionSearchQuery.includes('\n');
   const sessionSearchIsRaised = sessionSearchRaised && sessionSearchNeedsRaise;
   const drawerBlankSwipeFooterHeight = visibleConversations.length < 6 ? Math.max(180, windowHeight * 0.28) : 56;
+  const modelPickerSheetHeight = Math.max(
+    320,
+    Math.round(Math.min(windowHeight - modalTopInset, Math.max(420, windowHeight * 0.7)))
+  );
   void horizontalGestureLockVersion;
   const horizontalGestureLocked = drawerGestureLockCountRef.current > 0;
   const lockDrawerGesture = useCallback(() => {
@@ -3567,7 +3571,19 @@ export default function App() {
         <View style={styles.modalSheetRoot} pointerEvents={bottomSheetMode === 'models' ? 'auto' : 'none'}>
           <Animated.View style={[styles.modalBackdropLayer, { opacity: bottomSheetBackdropOpacity }]} />
           <Pressable style={styles.modalDismissArea} onPress={() => closeBottomSheet()} />
-          <Animated.View style={[styles.modalCardCompact, { backgroundColor: theme.surface, borderColor: theme.border, transform: [{ translateY: bottomSheetTranslateY }] }]}>
+          <Animated.View
+            style={[
+              styles.modalCardCompact,
+              styles.modelPickerSheet,
+              {
+                height: modelPickerSheetHeight,
+                maxHeight: modelPickerSheetHeight,
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                transform: [{ translateY: bottomSheetTranslateY }],
+              },
+            ]}
+          >
             <View style={styles.modelPickerHeader}>
               <View style={[styles.modalHeading, styles.modelPickerHeading]}>
                 <Text style={[styles.modalTitle, styles.modelPickerTitle, { color: theme.text }]} numberOfLines={1}>
@@ -3587,38 +3603,45 @@ export default function App() {
                 </Text>
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.profileChipRow, styles.modelProfileChipRow]}>
-              {persisted.profiles.map((profile) => {
-                const active = profile.id === persisted.activeProfileId;
-                return (
-                  <Pressable
-                    key={profile.id}
-                    style={[
-                      styles.profileChip,
-                      styles.modelProfileChip,
-                      themedPanel,
-                      active && [styles.profileChipSelected, themedSelected],
-                    ]}
-                    onPress={() => {
-                      void switchActiveApiProfile(profile.id);
-                    }}
-                    onLongPress={() => {
-                      triggerLongPressHaptic();
-                      void openApiProfileEditorFromPicker(profile);
-                    }}
-                  >
-                    <Text style={[styles.profileChipTitle, styles.modelProfileChipTitle, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
-                      {profile.label}
-                    </Text>
-                    <Text style={[styles.profileChipMeta, styles.modelProfileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
-                      {active ? copy.activeApiProfile : profile.model}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <View style={styles.modelProfileRail}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.modelProfileScroll}
+                contentContainerStyle={[styles.profileChipRow, styles.modelProfileChipRow]}
+              >
+                {persisted.profiles.map((profile) => {
+                  const active = profile.id === persisted.activeProfileId;
+                  return (
+                    <Pressable
+                      key={profile.id}
+                      style={[
+                        styles.profileChip,
+                        styles.modelProfileChip,
+                        themedPanel,
+                        active && [styles.profileChipSelected, themedSelected],
+                      ]}
+                      onPress={() => {
+                        void switchActiveApiProfile(profile.id);
+                      }}
+                      onLongPress={() => {
+                        triggerLongPressHaptic();
+                        void openApiProfileEditorFromPicker(profile);
+                      }}
+                    >
+                      <Text style={[styles.profileChipTitle, styles.modelProfileChipTitle, { color: theme.text }, active && themedSelectedText]} numberOfLines={1}>
+                        {profile.label}
+                      </Text>
+                      <Text style={[styles.profileChipMeta, styles.modelProfileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
+                        {active ? copy.activeApiProfile : profile.model}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
             <FlatList
-              style={styles.modalScroll}
+              style={styles.modelList}
               contentContainerStyle={styles.modelListContent}
               data={availableModels}
               keyExtractor={(model) => model}
@@ -4388,6 +4411,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  modelPickerSheet: {
+    overflow: 'hidden',
+  },
   settingsScreen: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -4745,8 +4771,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   modelListContent: {
-    paddingTop: 2,
+    paddingTop: 0,
     paddingBottom: 10,
+  },
+  modelList: {
+    flex: 1,
+    minHeight: 0,
   },
   modelOption: {
     minHeight: 52,
@@ -4938,6 +4968,17 @@ const styles = StyleSheet.create({
   modelProfileChipRow: {
     paddingTop: 12,
     paddingRight: 2,
+    paddingBottom: 10,
+    alignItems: 'stretch',
+  },
+  modelProfileRail: {
+    flexShrink: 0,
+    minHeight: 76,
+    marginBottom: 10,
+    zIndex: 1,
+  },
+  modelProfileScroll: {
+    flexGrow: 0,
   },
   profileChipSelected: {
     borderColor: '#60A5FA',
