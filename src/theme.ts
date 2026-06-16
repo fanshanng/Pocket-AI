@@ -15,6 +15,11 @@ export type AppTheme = {
   strong: string;
   primary: string;
   primarySoft: string;
+  selectedSurface: string;
+  selectedBorder: string;
+  selectedText: string;
+  actionStrong: string;
+  actionStrongText: string;
   dangerSoft: string;
   divider: string;
   input: string;
@@ -36,6 +41,11 @@ const LIGHT_THEME: AppTheme = {
   strong: '#111827',
   primary: '#2563EB',
   primarySoft: '#EFF6FF',
+  selectedSurface: '#EFF6FF',
+  selectedBorder: '#60A5FA',
+  selectedText: '#1D4ED8',
+  actionStrong: '#111827',
+  actionStrongText: '#FFFFFF',
   dangerSoft: '#FEF2F2',
   divider: '#E6ECF2',
   input: '#FFFFFF',
@@ -57,6 +67,11 @@ const DARK_THEME: AppTheme = {
   strong: '#F8FAFC',
   primary: '#60A5FA',
   primarySoft: '#172554',
+  selectedSurface: '#1E3A8A',
+  selectedBorder: '#60A5FA',
+  selectedText: '#BFDBFE',
+  actionStrong: '#60A5FA',
+  actionStrongText: '#0B1020',
   dangerSoft: '#3F1D24',
   divider: '#334155',
   input: '#111827',

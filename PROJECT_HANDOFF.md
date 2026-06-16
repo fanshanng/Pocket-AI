@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.1` / Android `versionCode 36`.
+- Current version: `1.2.2` / Android `versionCode 37`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -53,6 +53,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - First app icon set has been generated from `assets/icon-source.png.jpg`. Both Expo `assets/` and native Android `android/app/src/main/res/` launcher/splash resources were updated.
 - `RELEASE_CHECKLIST.md` documents the GitHub Release flow, APK hash/signature checks, smoke tests, and files that must never be uploaded.
 - v1.2.1 is the current rollback baseline for drawer gestures, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
+- v1.2.2 adds a first small theme-token cleanup for active/selected surfaces and strong action colors without changing layout, drawer gestures, or Markdown rendering.
 
 ## Key Files
 
@@ -182,7 +183,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.1 APK SHA-256:
+Current v1.2.2 APK SHA-256:
+
+```text
+874671F780467DCED915D91F49CCD153773CFD8275976D03A5536EB48B0233C0
+```
+
+Previous v1.2.1 APK SHA-256:
 
 ```text
 Not built in the baseline-only v1.2.1 round.

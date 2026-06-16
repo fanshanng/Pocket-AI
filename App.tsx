@@ -2861,7 +2861,8 @@ export default function App() {
   const usingInsecureHttp = draftProfile.baseUrl.trim().toLowerCase().startsWith('http://');
   const themedPanel = { backgroundColor: theme.surfaceAlt, borderColor: theme.border };
   const themedFieldInput = { backgroundColor: theme.surfaceAlt, borderColor: theme.border, color: theme.text };
-  const themedSelected = { backgroundColor: theme.primarySoft, borderColor: theme.primary };
+  const themedSelected = { backgroundColor: theme.selectedSurface, borderColor: theme.selectedBorder };
+  const themedSelectedText = { color: theme.selectedText };
   const themedMutedText = { color: theme.muted };
   const themedSubtleText = { color: theme.subtle };
 
@@ -3084,15 +3085,15 @@ export default function App() {
                 style={styles.attachOptionRow}
               >
                   <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFromCamera}>
-                    <Camera size={18} color="#2563EB" strokeWidth={2.3} />
+                    <Camera size={18} color={theme.primary} strokeWidth={2.3} />
                     <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.camera}</Text>
                   </Pressable>
                   <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachImages}>
-                    <ImageIcon size={18} color="#2563EB" strokeWidth={2.3} />
+                    <ImageIcon size={18} color={theme.primary} strokeWidth={2.3} />
                     <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.image}</Text>
                   </Pressable>
                   <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFiles}>
-                    <FileText size={18} color="#2563EB" strokeWidth={2.3} />
+                    <FileText size={18} color={theme.primary} strokeWidth={2.3} />
                     <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.file}</Text>
                   </Pressable>
               </SlideFadePresence>
@@ -3182,10 +3183,10 @@ export default function App() {
                             void selectDraftApiProfile(profile);
                           }}
                         >
-                          <Text style={[styles.profileChipTitle, { color: theme.text }, isEditing && { color: theme.primary }]}>
+                          <Text style={[styles.profileChipTitle, { color: theme.text }, isEditing && themedSelectedText]}>
                             {profile.label}
                           </Text>
-                          <Text style={[styles.profileChipMeta, { color: theme.muted }, isEditing && { color: theme.primary }]} numberOfLines={1}>
+                          <Text style={[styles.profileChipMeta, { color: theme.muted }, isEditing && themedSelectedText]} numberOfLines={1}>
                             {isActive ? copy.activeApiProfile : profile.model}
                           </Text>
                         </Pressable>
@@ -3223,7 +3224,7 @@ export default function App() {
                             style={[styles.suggestionChip, themedPanel, selected && [styles.selectedChip, themedSelected]]}
                             onPress={() => updateDraftProfileWithReasoningReset((current) => applyApiPreset(current, preset))}
                           >
-                            <Text style={[styles.suggestionChipText, themedSubtleText, selected && { color: theme.primary }]}>
+                            <Text style={[styles.suggestionChipText, themedSubtleText, selected && themedSelectedText]}>
                               {preset.label}
                             </Text>
                           </Pressable>
@@ -3266,7 +3267,7 @@ export default function App() {
                           style={[styles.suggestionChip, themedPanel, draftProfile.apiProtocol === protocol && [styles.selectedChip, themedSelected]]}
                           onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, apiProtocol: protocol }))}
                         >
-                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.apiProtocol === protocol && { color: theme.primary }]}>
+                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.apiProtocol === protocol && themedSelectedText]}>
                             {apiProtocolLabel(protocol, uiLanguage)}
                           </Text>
                         </Pressable>
@@ -3332,7 +3333,7 @@ export default function App() {
                           style={[styles.suggestionChip, themedPanel, draftProfile.model === model && [styles.selectedChip, themedSelected]]}
                           onPress={() => updateDraftProfileWithReasoningReset((current) => ({ ...current, model }))}
                         >
-                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.model === model && { color: theme.primary }]}>
+                          <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.model === model && themedSelectedText]}>
                             {model}
                           </Text>
                         </Pressable>
@@ -3359,7 +3360,7 @@ export default function App() {
                             style={[styles.suggestionChip, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, draftProfile.reasoningEffort === effort && [styles.selectedChip, themedSelected]]}
                             onPress={() => applyReasoningEffort(effort)}
                           >
-                            <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.reasoningEffort === effort && { color: theme.primary }]}>
+                            <Text style={[styles.suggestionChipText, themedSubtleText, draftProfile.reasoningEffort === effort && themedSelectedText]}>
                               {effort}
                             </Text>
                           </Pressable>
@@ -3600,10 +3601,10 @@ export default function App() {
                       void openApiProfileEditorFromPicker(profile);
                     }}
                   >
-                    <Text style={[styles.profileChipTitle, { color: theme.text }, active && { color: theme.primary }]}>
+                    <Text style={[styles.profileChipTitle, { color: theme.text }, active && themedSelectedText]}>
                       {profile.label}
                     </Text>
-                    <Text style={[styles.profileChipMeta, { color: theme.muted }, active && { color: theme.primary }]} numberOfLines={1}>
+                    <Text style={[styles.profileChipMeta, { color: theme.muted }, active && themedSelectedText]} numberOfLines={1}>
                       {active ? copy.activeApiProfile : profile.model}
                     </Text>
                   </Pressable>
@@ -3825,14 +3826,14 @@ export default function App() {
                 style={[
                   styles.drawerNewChatButton,
                   {
-                    backgroundColor: isDark ? theme.primary : '#111827',
+                    backgroundColor: theme.actionStrong,
                     shadowColor: isDark ? '#000000' : '#0F172A',
                   },
                 ]}
                 onPress={createNewSession}
               >
                 <PlusIcon light />
-                <Text style={styles.drawerNewChatText}>{copy.newSession}</Text>
+                <Text style={[styles.drawerNewChatText, { color: theme.actionStrongText }]}>{copy.newSession}</Text>
               </Pressable>
             </SafeAreaView>
           </Animated.View>
