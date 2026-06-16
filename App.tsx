@@ -82,9 +82,11 @@ import {
   isWithinDrawerOpenEdge,
 } from './src/lib/drawerGestures';
 import {
+  type AttachmentCacheStats,
   captureImageAttachment,
   clearAllAttachmentFiles,
   deleteAttachmentRecords,
+  getAttachmentCacheStats,
   pickDocumentAttachments,
   pickImageAttachments,
   persistSharedImageAttachments,
@@ -271,6 +273,8 @@ export default function App() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [checkingVersion, setCheckingVersion] = useState(false);
+  const [attachmentCacheStats, setAttachmentCacheStats] = useState<AttachmentCacheStats | null>(null);
+  const [refreshingAttachmentCacheStats, setRefreshingAttachmentCacheStats] = useState(false);
   const [systemColorScheme, setSystemColorScheme] = useState<'light' | 'dark' | null>(() =>
     normalizeSystemColorScheme(Appearance.getColorScheme())
   );
@@ -1198,6 +1202,30 @@ export default function App() {
     return created;
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    }
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  }
+
+  async function refreshAttachmentCacheStats() {
+    setRefreshingAttachmentCacheStats(true);
+    try {
+      setAttachmentCacheStats(await getAttachmentCacheStats());
+    } catch {
+      Alert.alert(copy.attachmentCacheTitle, copy.attachmentCacheStatsFailed);
+    } finally {
+      setRefreshingAttachmentCacheStats(false);
+    }
+  }
+
   async function openSettings(returnTarget: 'chat' | 'drawer' = 'chat') {
     setChatMenuVisible(false);
     const animationId = settingsPanelAnimationIdRef.current + 1;
@@ -1277,6 +1305,9 @@ export default function App() {
       return;
     }
     setSettingsSection(section);
+    if (section === 'storage') {
+      void refreshAttachmentCacheStats();
+    }
     animateSettingsContentIn(section === 'root' ? 'rootEnter' : 'forward');
   }
 
@@ -3505,6 +3536,28 @@ export default function App() {
                     <Text style={[styles.infoPanelTitle, { color: theme.text }]}>{copy.localStorageTitle}</Text>
                     <Text style={[styles.infoPanelText, { color: theme.muted }]}>{copy.localStorageDescription}</Text>
                   </View>
+                  <View style={[styles.infoPanel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+                    <View style={styles.infoPanelHeaderRow}>
+                      <Text style={[styles.infoPanelTitle, { color: theme.text }]}>{copy.attachmentCacheTitle}</Text>
+                      <Pressable
+                        style={[styles.inlineUtilityButton, styles.cacheRefreshButton, { backgroundColor: theme.surface, borderColor: theme.border }, refreshingAttachmentCacheStats && styles.disabledAction]}
+                        onPress={() => {
+                          void refreshAttachmentCacheStats();
+                        }}
+                        disabled={refreshingAttachmentCacheStats}
+                      >
+                        <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>
+                          {refreshingAttachmentCacheStats ? copy.refreshingAttachmentCacheStats : copy.refreshAttachmentCacheStats}
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <Text style={[styles.infoPanelText, { color: theme.muted }]}>{copy.attachmentCacheDescription}</Text>
+                    <Text style={[styles.cacheStatsText, { color: theme.text }]}>
+                      {attachmentCacheStats
+                        ? copy.attachmentCacheStats(attachmentCacheStats.fileCount, formatBytes(attachmentCacheStats.totalBytes))
+                        : copy.attachmentCacheStats(0, formatBytes(0))}
+                    </Text>
+                  </View>
                   <Pressable style={styles.dangerButton} onPress={confirmClearLocalData} disabled={savingProfile}>
                     <Text style={styles.dangerButtonText}>{copy.clearLocalData}</Text>
                   </Pressable>
@@ -4965,7 +5018,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 5,
-  },  profileSummaryAction: {
+  },
+  profileSummaryAction: {
     color: '#2563EB',
     fontSize: 13,
     fontWeight: '800',
@@ -4980,6 +5034,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     marginTop: 10,
   },
+  infoPanelHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   infoPanelTitle: {
     color: '#111827',
     fontSize: 14,
@@ -4990,14 +5050,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
-  },  pluginBadge: {
+  },
+  cacheRefreshButton: {
+    marginTop: 0,
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  cacheStatsText: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 10,
+  },
+  pluginBadge: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#BFDBFE',
     backgroundColor: '#EFF6FF',
     paddingHorizontal: 10,
     paddingVertical: 6,
-  },  contactRow: {
+  },
+  contactRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,

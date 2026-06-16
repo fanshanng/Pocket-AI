@@ -51,6 +51,7 @@ for (const exportName of [
   'captureImageAttachment',
   'pickDocumentAttachments',
   'persistSharedImageAttachments',
+  'getAttachmentCacheStats',
 ]) {
   check(files.includes(`export async function ${exportName}`), `${exportName} export missing`);
 }
@@ -156,6 +157,10 @@ check(!/formatAttachmentForExport[\s\S]*uri:/.test(conversations), 'JSON export 
 check(app.includes("copyConversationExport(sessionContextConversation, 'json')"), 'Session context JSON export action missing');
 check(app.includes("copyConversationExport(sessionContextConversation, 'markdown')"), 'Session context Markdown export action missing');
 check(app.includes("copySelectedSessionExports('json')"), 'Selected session JSON export action missing');
+check(app.includes('refreshAttachmentCacheStats'), 'Attachment cache stats refresh action missing');
+check(app.includes('copy.attachmentCacheStats'), 'Attachment cache stats display missing');
+check(files.includes('export type AttachmentCacheStats'), 'Attachment cache stats type missing');
+check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachment cache stats should read the attachment directory');
 
 for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',

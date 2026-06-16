@@ -16,6 +16,11 @@ export type SharedImageInput = string | {
   mimeType?: string | null;
 };
 
+export type AttachmentCacheStats = {
+  fileCount: number;
+  totalBytes: number;
+};
+
 function sanitizeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
@@ -81,6 +86,30 @@ export async function sweepOrphanedAttachments(attachmentsToKeep: AttachmentReco
     .map((uri) => FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined));
 
   await Promise.all(deletions);
+}
+
+export async function getAttachmentCacheStats(): Promise<AttachmentCacheStats> {
+  const directoryInfo = await FileSystem.getInfoAsync(ATTACHMENT_DIR);
+  if (!directoryInfo.exists) {
+    return { fileCount: 0, totalBytes: 0 };
+  }
+
+  const fileNames = await FileSystem.readDirectoryAsync(ATTACHMENT_DIR).catch(() => []);
+  let totalBytes = 0;
+  let fileCount = 0;
+
+  await Promise.all(
+    fileNames.map(async (name) => {
+      const info = await FileSystem.getInfoAsync(`${ATTACHMENT_DIR}${name}`).catch(() => null);
+      if (!info?.exists) {
+        return;
+      }
+      fileCount += 1;
+      totalBytes += info.size ?? 0;
+    })
+  );
+
+  return { fileCount, totalBytes };
 }
 
 async function persistAsset(
