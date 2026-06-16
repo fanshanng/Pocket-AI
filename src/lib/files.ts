@@ -10,6 +10,8 @@ const ROOT_DIR = `${FileSystem.documentDirectory}ai-chat-pocket/`;
 const ATTACHMENT_DIR = `${ROOT_DIR}attachments/`;
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
+// Keep attachment size failures typed so UI code can localize them without
+// parsing provider/runtime error strings.
 export class AttachmentSizeError extends Error {
   readonly code = 'ATTACHMENT_TOO_LARGE';
 
@@ -192,6 +194,9 @@ async function persistAsset(
   const id = makeId(kind);
   const destination = `${ATTACHMENT_DIR}${id}_${safeName}`;
   await FileSystem.copyAsync({ from: input.uri, to: destination });
+
+  // Some Android content URIs do not report size before copying. Re-check the
+  // private copy and remove it immediately if the real file exceeds the limit.
   const info = await FileSystem.getInfoAsync(destination).catch(() => null);
   const finalSize = info?.exists ? info.size ?? size : size;
   try {

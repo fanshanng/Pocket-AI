@@ -1006,6 +1006,8 @@ export default function App() {
 
     let mounted = true;
     const appendSharedImages = async (inputs: SharedImageInput[]) => {
+      // Android may deliver the same shared URI both as an initial intent and
+      // as a native event; keep the composer from duplicating that attachment.
       const nextInputs = inputs.filter((input) => {
         const uri = getSharedImageUri(input);
         if (!uri || handledSharedImageUrisRef.current.has(uri)) {
@@ -1248,6 +1250,8 @@ export default function App() {
 
   function getAttachmentFailureMessage(error: unknown, fallbackMessage: string): string {
     if (isAttachmentSizeError(error)) {
+      // Size errors carry structured fields so the user sees the file name,
+      // measured size, and active limit in the current UI language.
       return copy.attachmentTooLargeMessage(
         error.fileName,
         formatBytes(error.size),
