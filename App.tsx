@@ -462,7 +462,7 @@ export default function App() {
   const composerLineCount = composerText.split('\n').length;
   const composerNeedsExpand = composerText.length >= 220 || composerLineCount >= 7;
   const composerSingleLine = composerLineCount <= 1 && composerText.length < 40;
-  const composerBottomInset = Platform.OS === 'android' ? (compactWindow ? 4 : 8) : 10;
+  const composerBottomInset = Platform.OS === 'android' ? (compactWindow ? 8 : 14) : 14;
   const sessionSearchNeedsRaise = sessionSearchQuery.length > 28 || sessionSearchQuery.includes('\n');
   const sessionSearchIsRaised = sessionSearchRaised && sessionSearchNeedsRaise;
   const drawerBlankSwipeFooterHeight = visibleConversations.length < 6 ? Math.max(180, windowHeight * 0.28) : 56;
@@ -3016,7 +3016,25 @@ export default function App() {
                   ))}
                 </ScrollView>
               )}
-                <View style={styles.composerRow}>
+              <SlideFadePresence
+                visible={attachmentMenuVisible && !composerDisabled}
+                from="bottom"
+                style={styles.attachOptionRow}
+              >
+                <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFromCamera}>
+                  <Camera size={18} color={theme.primary} strokeWidth={2.3} />
+                  <Text style={[styles.attachOptionText, { color: theme.text }]} numberOfLines={1}>{copy.camera}</Text>
+                </Pressable>
+                <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachImages}>
+                  <ImageIcon size={18} color={theme.primary} strokeWidth={2.3} />
+                  <Text style={[styles.attachOptionText, { color: theme.text }]} numberOfLines={1}>{copy.image}</Text>
+                </Pressable>
+                <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFiles}>
+                  <FileText size={18} color={theme.primary} strokeWidth={2.3} />
+                  <Text style={[styles.attachOptionText, { color: theme.text }]} numberOfLines={1}>{copy.file}</Text>
+                </Pressable>
+              </SlideFadePresence>
+              <View style={styles.composerRow}>
                 <Pressable
                   style={[
                     styles.attachButton,
@@ -3030,7 +3048,7 @@ export default function App() {
                   accessibilityRole="button"
                   accessibilityLabel={copy.attachMenu}
                 >
-                  <PlusIcon color={theme.text} />
+                  <PlusIcon color={attachmentMenuVisible ? theme.primary : theme.text} />
                 </Pressable>
                 <View style={[styles.composerInputWrap, { backgroundColor: theme.input, borderColor: theme.border }]}>
                   {composerNeedsExpand && (
@@ -3080,24 +3098,6 @@ export default function App() {
                   />
                 </View>
               </View>
-              <SlideFadePresence
-                visible={attachmentMenuVisible && !composerDisabled}
-                from="bottom"
-                style={styles.attachOptionRow}
-              >
-                  <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFromCamera}>
-                    <Camera size={18} color={theme.primary} strokeWidth={2.3} />
-                    <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.camera}</Text>
-                  </Pressable>
-                  <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachImages}>
-                    <ImageIcon size={18} color={theme.primary} strokeWidth={2.3} />
-                    <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.image}</Text>
-                  </Pressable>
-                  <Pressable style={[styles.attachOption, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={attachFiles}>
-                    <FileText size={18} color={theme.primary} strokeWidth={2.3} />
-                    <Text style={[styles.attachOptionText, { color: theme.text }]}>{copy.file}</Text>
-                  </Pressable>
-              </SlideFadePresence>
             </Animated.View>
           </View>
           </DrawerGestureContext.Provider>
@@ -4080,7 +4080,7 @@ const styles = StyleSheet.create({
   pendingRail: {
     gap: 8,
     paddingHorizontal: 2,
-    paddingBottom: 6,
+    paddingBottom: 8,
   },
   pendingChip: {
     maxWidth: 180,
@@ -4104,6 +4104,7 @@ const styles = StyleSheet.create({
   composerDock: {
     marginHorizontal: 12,
     marginTop: 0,
+    paddingBottom: 2,
   },
   composerRow: {
     minHeight: 46,
@@ -4172,9 +4173,9 @@ const styles = StyleSheet.create({
     borderColor: '#2563EB',
   },
   attachButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#D8E0EA',
@@ -4184,12 +4185,12 @@ const styles = StyleSheet.create({
   attachOptionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 8,
+    marginBottom: 10,
     width: '100%',
   },
   attachOption: {
     flex: 1,
-    minHeight: 52,
+    height: 56,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#D8E0EA',
@@ -4197,13 +4198,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     gap: 6,
   },
   attachOptionText: {
     color: '#111827',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
+    flexShrink: 1,
   },
   fullComposerScreen: {
     flex: 1,
