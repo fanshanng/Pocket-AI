@@ -1,8 +1,6 @@
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Animated,
   Linking,
-  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -52,8 +50,6 @@ type HorizontalScrollableProps = {
 
 const TABLE_MIN_COLUMN_WIDTH = 104;
 const TABLE_MAX_ESTIMATED_WIDTH = 7200;
-const FORMULA_HORIZONTAL_ACTIVATION_DISTANCE = 8;
-const FORMULA_HORIZONTAL_SLOPE = 1.2;
 
 const markdownIt = new MarkdownIt({
   breaks: true,
@@ -670,7 +666,7 @@ function getEstimatedTableWidth(children: ReactNode): number {
   return Math.min(TABLE_MAX_ESTIMATED_WIDTH, Math.max(320, columnCount * TABLE_MIN_COLUMN_WIDTH));
 }
 
-function DirectionalFormulaScrollable({
+function EagerHorizontalScrollable({
   children,
   style,
   contentContainerStyle,
@@ -678,34 +674,11 @@ function DirectionalFormulaScrollable({
   onHorizontalGestureStart,
   onHorizontalGestureEnd,
 }: HorizontalScrollableProps) {
-  // Formula blocks sit inside the vertical message list; only clear horizontal drags should take over.
   const lockedRef = useRef(false);
-  const offsetRef = useRef(0);
-  const maxOffsetRef = useRef(0);
-  const dragStartOffsetRef = useRef(0);
-  const translateX = useRef(new Animated.Value(0)).current;
-  const { width: windowWidth } = useWindowDimensions();
-  const fallbackViewportWidth = Math.max(1, Math.round(windowWidth - 32));
-  const [viewportWidth, setViewportWidth] = useState(fallbackViewportWidth);
   const forcedContentWidth =
     typeof contentWidth === 'number' && Number.isFinite(contentWidth)
       ? Math.max(1, Math.ceil(contentWidth))
       : undefined;
-  const maxOffset = Math.max(0, (forcedContentWidth ?? viewportWidth) - viewportWidth);
-  maxOffsetRef.current = maxOffset;
-
-  useEffect(() => {
-    setViewportWidth(fallbackViewportWidth);
-  }, [fallbackViewportWidth]);
-
-  const setOffset = useCallback(
-    (nextOffset: number) => {
-      const bounded = Math.min(maxOffsetRef.current, Math.max(0, nextOffset));
-      offsetRef.current = bounded;
-      translateX.setValue(-bounded);
-    },
-    [translateX]
-  );
 
   const beginLock = useCallback(() => {
     if (lockedRef.current) return;
@@ -720,56 +693,34 @@ function DirectionalFormulaScrollable({
   }, [onHorizontalGestureEnd]);
 
   useEffect(() => () => endLock(), [endLock]);
-  useEffect(() => {
-    setOffset(Math.min(offsetRef.current, maxOffset));
-  }, [maxOffset, setOffset]);
-
-  const panResponder = useMemo(
-    () => PanResponder.create({
-      onMoveShouldSetPanResponder: (_event, gestureState) => {
-        const absDx = Math.abs(gestureState.dx);
-        const absDy = Math.abs(gestureState.dy);
-        return (
-          maxOffsetRef.current > 0 &&
-          absDx > FORMULA_HORIZONTAL_ACTIVATION_DISTANCE &&
-          absDx > absDy * FORMULA_HORIZONTAL_SLOPE
-        );
-      },
-      onPanResponderGrant: () => {
-        dragStartOffsetRef.current = offsetRef.current;
-        beginLock();
-      },
-      onPanResponderMove: (_event, gestureState) => {
-        setOffset(dragStartOffsetRef.current - gestureState.dx);
-      },
-      onPanResponderRelease: endLock,
-      onPanResponderTerminate: endLock,
-    }),
-    [beginLock, endLock, setOffset]
-  );
 
   return (
-    <View
-      style={[style, localStyles.formulaViewport]}
-      onLayout={(event) => {
-        const nextWidth = Math.max(1, Math.round(event.nativeEvent.layout.width));
-        setViewportWidth(nextWidth);
-      }}
-      {...panResponder.panHandlers}
-    >
-      <Animated.View
-        style={[
+    <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        alwaysBounceVertical={false}
+        showsHorizontalScrollIndicator
+        style={[style, localStyles.scrollViewport]}
+        contentContainerStyle={[
           contentContainerStyle,
-          localStyles.formulaContent,
+          localStyles.eagerScrollContent,
           forcedContentWidth
             ? { width: forcedContentWidth, minWidth: forcedContentWidth }
             : undefined,
-          { transform: [{ translateX }] },
         ]}
+        onTouchStart={beginLock}
+        onTouchEnd={endLock}
+        onTouchCancel={endLock}
+        onScrollBeginDrag={beginLock}
+        onMomentumScrollBegin={beginLock}
+        onScrollEndDrag={endLock}
+        onMomentumScrollEnd={endLock}
       >
         {children}
-      </Animated.View>
-    </View>
+      </ScrollView>
+    </NativeViewGestureHandler>
   );
 }
 
@@ -817,7 +768,7 @@ function BlockMathView({
   }
 
   return (
-    <DirectionalFormulaScrollable
+    <EagerHorizontalScrollable
       style={dynamicStyles.mathBlockWrap}
       contentContainerStyle={dynamicStyles.mathBlockScrollContent}
       contentWidth={resolvedWidth}
@@ -852,7 +803,7 @@ function BlockMathView({
           onMessage={handleMessage}
         />
       </View>
-    </DirectionalFormulaScrollable>
+    </EagerHorizontalScrollable>
   );
 }
 
@@ -1037,15 +988,6 @@ const localStyles = StyleSheet.create({
     flexGrow: 0,
   },
   eagerScrollContent: {
-    alignItems: 'flex-start',
-    alignSelf: 'flex-start',
-    flexGrow: 0,
-  },
-  formulaViewport: {
-    maxWidth: '100%',
-    overflow: 'hidden',
-  },
-  formulaContent: {
     alignItems: 'flex-start',
     alignSelf: 'flex-start',
     flexGrow: 0,

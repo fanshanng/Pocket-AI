@@ -1,6 +1,6 @@
 {
   "name": "ai-chat-pocket",
-  "version": "1.2.26",
+  "version": "1.2.27",
   "main": "index.ts",
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",

@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.26` / Android `versionCode 61`.
+- Current version: `1.2.27` / Android `versionCode 62`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -78,6 +78,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.24 changes block formulas to use the same horizontal-scroll gesture strategy as tables, so vertical drags over formulas can continue scrolling the message list.
 - v1.2.25 reverts the v1.2.24 formula scroll experiment and restores the v1.2.23 eager formula horizontal-scroll implementation because v1.2.24 broke formula horizontal scrolling.
 - v1.2.26 changes block formulas to a formula-only directional drag layer so clear horizontal drags pan long formulas while vertical drags can remain with the message list.
+- v1.2.27 reverts the v1.2.26 formula directional-drag experiment after device testing showed vertical drags over formulas were still captured; formula horizontal scrolling is restored to the v1.2.25 behavior.
 
 ## Key Files
 
@@ -227,7 +228,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.26 APK SHA-256:
+Current v1.2.27 APK SHA-256:
+
+```text
+3BD63EEB2549A60929C63A93E2E254186ADAA558468EDBA44D8A921390E5B6A3
+```
+
+Previous v1.2.26 APK SHA-256:
 
 ```text
 BFDF485FB69E45AE6621E69FBB848F176FDAC1131367799992B065FCA5AF058D
