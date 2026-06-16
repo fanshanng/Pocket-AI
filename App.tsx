@@ -1218,7 +1218,12 @@ export default function App() {
   async function refreshAttachmentCacheStats() {
     setRefreshingAttachmentCacheStats(true);
     try {
-      setAttachmentCacheStats(await getAttachmentCacheStats());
+      setAttachmentCacheStats(
+        await getAttachmentCacheStats([
+          ...getAllConversationAttachments(persisted.conversations),
+          ...pendingAttachments,
+        ])
+      );
     } catch {
       Alert.alert(copy.attachmentCacheTitle, copy.attachmentCacheStatsFailed);
     } finally {
@@ -3554,8 +3559,13 @@ export default function App() {
                     <Text style={[styles.infoPanelText, { color: theme.muted }]}>{copy.attachmentCacheDescription}</Text>
                     <Text style={[styles.cacheStatsText, { color: theme.text }]}>
                       {attachmentCacheStats
-                        ? copy.attachmentCacheStats(attachmentCacheStats.fileCount, formatBytes(attachmentCacheStats.totalBytes))
-                        : copy.attachmentCacheStats(0, formatBytes(0))}
+                        ? copy.attachmentCacheStats(
+                            attachmentCacheStats.fileCount,
+                            formatBytes(attachmentCacheStats.totalBytes),
+                            attachmentCacheStats.referencedFileCount,
+                            formatBytes(attachmentCacheStats.referencedTotalBytes)
+                          )
+                        : copy.attachmentCacheStats(0, formatBytes(0), 0, formatBytes(0))}
                     </Text>
                   </View>
                   <Pressable style={styles.dangerButton} onPress={confirmClearLocalData} disabled={savingProfile}>

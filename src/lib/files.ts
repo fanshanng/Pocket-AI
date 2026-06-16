@@ -19,6 +19,8 @@ export type SharedImageInput = string | {
 export type AttachmentCacheStats = {
   fileCount: number;
   totalBytes: number;
+  referencedFileCount: number;
+  referencedTotalBytes: number;
 };
 
 function sanitizeName(value: string): string {
@@ -88,10 +90,28 @@ export async function sweepOrphanedAttachments(attachmentsToKeep: AttachmentReco
   await Promise.all(deletions);
 }
 
-export async function getAttachmentCacheStats(): Promise<AttachmentCacheStats> {
+function getReferencedAttachmentStats(attachments: AttachmentRecord[]): Pick<AttachmentCacheStats, 'referencedFileCount' | 'referencedTotalBytes'> {
+  const unique = new Map<string, AttachmentRecord>();
+  for (const attachment of attachments) {
+    unique.set(attachment.uri || attachment.id, attachment);
+  }
+
+  let referencedTotalBytes = 0;
+  for (const attachment of unique.values()) {
+    referencedTotalBytes += attachment.size ?? 0;
+  }
+
+  return {
+    referencedFileCount: unique.size,
+    referencedTotalBytes,
+  };
+}
+
+export async function getAttachmentCacheStats(attachments: AttachmentRecord[] = []): Promise<AttachmentCacheStats> {
+  const referenced = getReferencedAttachmentStats(attachments);
   const directoryInfo = await FileSystem.getInfoAsync(ATTACHMENT_DIR);
   if (!directoryInfo.exists) {
-    return { fileCount: 0, totalBytes: 0 };
+    return { fileCount: 0, totalBytes: 0, ...referenced };
   }
 
   const fileNames = await FileSystem.readDirectoryAsync(ATTACHMENT_DIR).catch(() => []);
@@ -109,7 +129,7 @@ export async function getAttachmentCacheStats(): Promise<AttachmentCacheStats> {
     })
   );
 
-  return { fileCount, totalBytes };
+  return { fileCount, totalBytes, ...referenced };
 }
 
 async function persistAsset(

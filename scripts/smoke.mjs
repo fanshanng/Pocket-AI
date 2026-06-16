@@ -161,6 +161,9 @@ check(app.includes('refreshAttachmentCacheStats'), 'Attachment cache stats refre
 check(app.includes('copy.attachmentCacheStats'), 'Attachment cache stats display missing');
 check(files.includes('export type AttachmentCacheStats'), 'Attachment cache stats type missing');
 check(files.includes('FileSystem.readDirectoryAsync(ATTACHMENT_DIR)'), 'Attachment cache stats should read the attachment directory');
+check(files.includes('referencedFileCount'), 'Attachment cache stats should include referenced attachment count');
+check(app.includes('...getAllConversationAttachments(persisted.conversations)') && app.includes('...pendingAttachments'), 'Attachment cache stats should include saved and pending attachment references');
+check(conversations.includes('message.variants?.flatMap((variant) => variant.attachments)'), 'Conversation attachment collection should include variant attachments');
 
 for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',

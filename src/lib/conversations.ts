@@ -41,7 +41,10 @@ export function sortConversationsForList(conversations: ConversationRecord[]): C
 }
 
 export function getConversationAttachments(conversation: ConversationRecord): AttachmentRecord[] {
-  return conversation.messages.flatMap((message) => message.attachments);
+  return conversation.messages.flatMap((message) => [
+    ...message.attachments,
+    ...(message.variants?.flatMap((variant) => variant.attachments) ?? []),
+  ]);
 }
 
 export function getAllConversationAttachments(conversations: ConversationRecord[]): AttachmentRecord[] {

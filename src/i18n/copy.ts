@@ -24,7 +24,12 @@ export type LanguageCopy = {
   localStorageDescription: string;
   attachmentCacheTitle: string;
   attachmentCacheDescription: string;
-  attachmentCacheStats: (fileCount: number, sizeLabel: string) => string;
+  attachmentCacheStats: (
+    fileCount: number,
+    sizeLabel: string,
+    referencedFileCount: number,
+    referencedSizeLabel: string
+  ) => string;
   refreshAttachmentCacheStats: string;
   refreshingAttachmentCacheStats: string;
   attachmentCacheStatsFailed: string;
@@ -171,8 +176,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     localStorageDescription:
       '聊天记录、会话列表和 API 配置会加密后保存在本机应用私有存储（AsyncStorage: ai-chat-pocket.state.v1）。加密密钥和 API key 保存在系统 SecureStore/Keystore；导入的附件会复制到应用私有文件目录。卸载应用或清空本地数据会删除这些内容。',
     attachmentCacheTitle: '附件缓存',
-    attachmentCacheDescription: '统计已经复制到应用私有目录的附件文件。导出聊天记录时不会包含本机附件路径。',
-    attachmentCacheStats: (fileCount, sizeLabel) => `${fileCount} 个文件 · ${sizeLabel}`,
+    attachmentCacheDescription: '统计应用私有目录里的缓存文件，并同时显示当前聊天记录引用到的附件。导出聊天记录时不会包含本机附件路径。',
+    attachmentCacheStats: (fileCount, sizeLabel, referencedFileCount, referencedSizeLabel) =>
+      `缓存文件：${fileCount} 个 · ${sizeLabel}\n会话引用：${referencedFileCount} 个 · ${referencedSizeLabel}`,
     refreshAttachmentCacheStats: '刷新缓存统计',
     refreshingAttachmentCacheStats: '刷新中...',
     attachmentCacheStatsFailed: '无法读取附件缓存统计。',
@@ -318,8 +324,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     localStorageDescription:
       'Chats, sessions, and API profiles are encrypted into this app private storage (AsyncStorage: ai-chat-pocket.state.v1). The encryption key and API keys are stored in system SecureStore/Keystore; imported attachments are copied into the app private file directory. Uninstalling the app or clearing local data removes them.',
     attachmentCacheTitle: 'Attachment cache',
-    attachmentCacheDescription: 'Counts attachment files copied into app-private storage. Chat exports do not include local attachment paths.',
-    attachmentCacheStats: (fileCount, sizeLabel) => `${fileCount} files · ${sizeLabel}`,
+    attachmentCacheDescription: 'Counts cache files in app-private storage and also shows attachments referenced by current chats. Chat exports do not include local attachment paths.',
+    attachmentCacheStats: (fileCount, sizeLabel, referencedFileCount, referencedSizeLabel) =>
+      `Cache files: ${fileCount} · ${sizeLabel}\nChat references: ${referencedFileCount} · ${referencedSizeLabel}`,
     refreshAttachmentCacheStats: 'Refresh cache stats',
     refreshingAttachmentCacheStats: 'Refreshing...',
     attachmentCacheStatsFailed: 'Unable to read attachment cache stats.',
