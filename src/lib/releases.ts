@@ -1,6 +1,6 @@
 import { compareVersions } from './version';
 
-export const APP_VERSION = '1.2.12';
+export const APP_VERSION = '1.2.13';
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/fanshanng/Pocket-AI/releases/latest';
 

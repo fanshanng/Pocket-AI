@@ -38,7 +38,6 @@ import {
   Image as ImageIcon,
   Maximize2,
   RefreshCw,
-  Trash2,
   X,
 } from 'lucide-react-native';
 
@@ -4149,23 +4148,6 @@ export default function App() {
                 resizeMode="contain"
               />
             )}
-            {!!previewAttachment && (
-              <View style={styles.attachmentPreviewActions}>
-                <Pressable
-                  style={[styles.modalGhost, styles.attachmentPreviewAction, { borderColor: theme.border }]}
-                  onPress={() => setPreviewAttachment(null)}
-                >
-                  <Text style={[styles.modalGhostText, { color: theme.subtle }]}>{copy.close}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.attachmentPreviewDelete, styles.attachmentPreviewAction]}
-                  onPress={() => removePendingAttachment(previewAttachment.id)}
-                >
-                  <Trash2 size={17} color="#FFFFFF" strokeWidth={2.4} />
-                  <Text style={styles.attachmentPreviewDeleteText}>{copy.delete}</Text>
-                </Pressable>
-              </View>
-            )}
           </View>
         </View>
       </Modal>
@@ -4655,28 +4637,6 @@ const styles = StyleSheet.create({
     maxHeight: '72%',
     borderRadius: 14,
     backgroundColor: '#020617',
-  },
-  attachmentPreviewActions: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  attachmentPreviewAction: {
-    flex: 1,
-  },
-  attachmentPreviewDelete: {
-    minHeight: 46,
-    borderRadius: 16,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  attachmentPreviewDeleteText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
   },
   contextMenuBackdrop: {
     flex: 1,

@@ -167,6 +167,7 @@ check(conversations.includes('message.variants?.flatMap((variant) => variant.att
 check(files.includes('normalizeDisplayName'), 'Attachment display names should preserve decoded original names');
 check(files.includes('name: displayName'), 'Attachment records should keep display names separate from safe storage names');
 check(app.includes('previewAttachment') && app.includes('attachmentPreviewImage'), 'Pending image attachment preview modal missing');
+check(!app.includes('attachmentPreviewDelete') && !app.includes('attachmentPreviewActions'), 'Pending image preview should only use the top-right close button');
 check(app.includes('pendingChipThumb'), 'Pending image attachment thumbnail missing');
 check(app.includes('formatAttachmentMeta(attachment)'), 'Pending attachment chips should show type and size metadata');
 check(app.includes('composerLayoutLift'), 'Android composer layout lift missing');

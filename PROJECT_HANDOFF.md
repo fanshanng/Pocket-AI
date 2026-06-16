@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.12` / Android `versionCode 47`.
+- Current version: `1.2.13` / Android `versionCode 48`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -64,6 +64,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.10 fixes attachment cache stats by showing both app-private cache-directory files and chat/pending attachment references, including message variant attachments, so Settings no longer reports only a misleading `0` when cached files are not discoverable.
 - v1.2.11 improves pending attachment chips with original display names, type/size metadata, image thumbnails, and a pending image preview/delete modal while keeping storage paths ASCII-safe and attachment sending unchanged.
 - v1.2.12 fixes the Android `+` attachment button tap target while the keyboard is open by lifting the composer with layout margin instead of transform-only movement.
+- v1.2.13 simplifies the pending image preview modal so the top-right close button is the only preview action; attachment chip deletion remains on the chip itself.
 
 ## Key Files
 
@@ -195,7 +196,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.12 APK SHA-256:
+Current v1.2.13 APK SHA-256:
+
+```text
+6EC54307A4C5ADB50ED28659AA014643B8C16BF41752A9045965F302F57D8922
+```
+
+Previous v1.2.12 APK SHA-256:
 
 ```text
 DB07822AFF75BCCD9AC23A896A83102ACA11012408C5167940369FBAC62184E3
