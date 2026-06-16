@@ -1,8 +1,8 @@
 # Pocket AI
 
-Pocket AI 是一个 Android 本地优先的 AI 聊天应用。
+Pocket AI 是一个 Android 本地优先的 AI 聊天应用。它直接连接你自己配置的 OpenAI 兼容接口，支持文字聊天、图片输入、拍照、文件附件、流式回复、代码块复制、Markdown 表格和公式显示。
 
-它直接连接你自己配置的 OpenAI 兼容接口，支持文字聊天、图片输入、拍照、文件附件、流式回复、代码块复制、Markdown 表格和公式显示。正常安装使用不需要电脑端常驻进程，也不需要 Metro/LAN。
+正常安装使用不需要电脑端常驻进程，也不需要 Metro/LAN。
 
 ## 使用
 
@@ -29,3 +29,8 @@ Base URL：https://api.openai.com/v1
 ## 数据
 
 聊天记录、附件缓存和 API 配置保存在本机。API Key 使用系统安全存储保存，不会写入导出文件或上传到仓库。
+
+## 开发记录
+
+- 每个小版本的改动和测试记录保存在 `release-notes/`。
+- 当前架构梳理和后续拆分计划保存在 `docs/ARCHITECTURE_PLAN.md`。

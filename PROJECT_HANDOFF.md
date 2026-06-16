@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.16` / Android `versionCode 51`.
+- Current version: `1.2.17` / Android `versionCode 52`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -68,6 +68,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.14 adds clearer localized oversized-attachment prompts and cleans up copied files if the real copied size exceeds the attachment limit.
 - v1.2.15 starts the audit-comment convention with focused English comments around recent attachment-size and shared-image edge cases; behavior is unchanged.
 - v1.2.16 adds focused English audit comments and smoke protection around chat export privacy boundaries; export behavior is unchanged.
+- v1.2.17 refreshes the public README and adds `docs/ARCHITECTURE_PLAN.md` as the living architecture/roadmap document; runtime behavior is unchanged.
 
 ## Key Files
 
@@ -105,6 +106,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - Per-release checklist for GitHub APK publishing.
 - `release-notes/`
   - Per-version change/test records and GitHub Release page drafts. Add future `RELEASE_NOTES_vX.Y.Z.md` files here instead of the repository root.
+- `docs/ARCHITECTURE_PLAN.md`
+  - Current architecture map, refactor rules, target layers, and staged version queue for future framework work.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt`
   - Native bridge for pending shared/dragged image URI events.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/MainActivity.kt`
@@ -149,17 +152,19 @@ Project ID and Organization are OpenAI account/project routing headers and shoul
 
 Recommended next tasks:
 
-1. Split `App.tsx`.
-   Extract `ChatScreen`, `Composer`, `SettingsModal`, `ApiProfilesModal`, `SessionsModal`, `useChatState`, and `useApiProfiles`.
-2. Rich generated files.
+1. Follow `docs/ARCHITECTURE_PLAN.md`.
+   Keep framework work small: extract presentational pieces first, then hooks, then provider capabilities.
+2. Split `App.tsx`.
+   Extract `ChatScreen`, `Composer`, `SettingsScreen`, `ModelPickerSheet`, `SessionDrawer`, `AttachmentMenu`, and related hooks in separate patch versions.
+3. Provider capability flags.
+   Track whether a profile supports Responses chaining, streaming, images, files, system prompts, reasoning parameters, and future web search.
+4. Rich generated files.
    Add provider-specific image generation and PDF/DOCX export. Current support covers downloaded image/document URLs only.
-3. Conversation management.
+5. Conversation management.
    Add pin, batch delete, import, and share-sheet export.
-4. Context management.
+6. Context management.
    Add recent-message windows, automatic old-message summaries, and per-provider token/attachment limits.
-5. Provider capability flags.
-   Track whether a profile supports Responses chaining, images, files, system prompts, and thinking/reasoning parameters.
-6. Security polish.
+7. Security polish.
    Add app lock / biometric unlock and encrypted backup/restore.
 
 ## Validation Commands
@@ -199,7 +204,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.16 APK SHA-256:
+Current v1.2.17 APK SHA-256:
+
+```text
+FC37B9508A5B07EE694BD6520E66CB31AB6BC5DADAF1E3B687F6C0C691445D5F
+```
+
+Previous v1.2.16 APK SHA-256:
 
 ```text
 7AE867604116637E0C3D6FE3202FE644F75E96F01133DB9EF71017B81BD73067
