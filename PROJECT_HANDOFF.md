@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.22` / Android `versionCode 57`.
+- Current version: `1.2.23` / Android `versionCode 58`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -74,6 +74,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.20 fixes API Base URL editing so clearing a preset URL no longer immediately restores the default while the user is replacing it; saved profiles and network actions still require a non-empty URL.
 - v1.2.21 extracts editable API profile draft helpers into `src/lib/profileDrafts.ts` so Base URL draft behavior is guarded outside `App.tsx`; UI and request behavior are unchanged.
 - v1.2.22 adds provider capability metadata and default inference in `src/lib/providerCapabilities.ts` as a foundation for future per-profile features such as web search; request behavior and UI are unchanged.
+- v1.2.23 adds a release audit script and final 1.2-series publishing checks for version consistency, release notes completeness, README cleanliness, and forbidden upload files; runtime behavior is unchanged.
 
 ## Key Files
 
@@ -119,6 +120,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - `icon-source.png.jpg` is the current source image for regenerated icon assets.
 - `RELEASE_CHECKLIST.md`
   - Per-release checklist for GitHub APK publishing.
+- `scripts/release-audit.mjs`
+  - Final release consistency audit for version numbers, current release notes, README shape, upload-folder forbidden files, and 1.3.0 planning visibility.
 - `release-notes/`
   - Per-version change/test records and GitHub Release page drafts. Add future `RELEASE_NOTES_vX.Y.Z.md` files here instead of the repository root.
 - `docs/ARCHITECTURE_PLAN.md`
@@ -171,8 +174,8 @@ Recommended next tasks:
    Keep framework work small: extract presentational pieces first, then hooks, then provider capabilities.
 2. Split `App.tsx`.
    Extract `ChatScreen`, `Composer`, `SettingsScreen`, `ModelPickerSheet`, `SessionDrawer`, `AttachmentMenu`, and related hooks in separate patch versions.
-3. Release stability audit.
-   Check README, release notes, architecture plan, forbidden upload files, version numbers, and full manual regression before cutting the final 1.2-series build.
+3. Publish v1.3.0 from the latest stable 1.2-series build.
+   Reuse the final release notes/checklist, create the tag/release manually, and attach the verified APK.
 4. Provider-specific features.
    Use `src/lib/providerCapabilities.ts` before adding future web search, generated files, or provider-specific request parameters.
 5. Rich generated files.
@@ -221,7 +224,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.22 APK SHA-256:
+Current v1.2.23 APK SHA-256:
+
+```text
+7F0F5366593612BBECD745F82887D010545A6D7F49B2A93BDB50AE206E336E6D
+```
+
+Previous v1.2.22 APK SHA-256:
 
 ```text
 C72FF948C5D988BC276835083507E119DF396453F361E8EA5A8A4968590FB103

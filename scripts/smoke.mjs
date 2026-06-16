@@ -16,6 +16,7 @@ function check(condition, message) {
 const packageJson = JSON.parse(read('package.json'));
 const appJson = JSON.parse(read('app.json'));
 const index = read('index.ts');
+const releaseAudit = read('scripts/release-audit.mjs');
 const app = read('App.tsx');
 const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
 const messageBubble = read('src/components/MessageBubble.tsx');
@@ -37,9 +38,19 @@ const keyboardInsetsModule = read('android/app/src/main/java/com/fanshanng/aicha
 const manifest = read('android/app/src/main/AndroidManifest.xml');
 
 check(packageJson.main === 'index.ts', 'package.json main should remain index.ts');
+check(packageJson.scripts?.['release:audit'] === 'node scripts/release-audit.mjs', 'Release audit script should stay wired in package.json');
 check(String(packageJson.dependencies.expo ?? '').startsWith('~56.'), 'Expo SDK should remain version 56');
 check(appJson.expo?.android?.package === 'com.fanshanng.aichatpocket', 'Android package name changed');
 check(index.includes("registerRootComponent(App)"), 'Root component registration missing');
+for (const auditGuard of [
+  'assertReleaseNoteShape',
+  'assertForbiddenUploadFiles',
+  'README should not contain a Download section',
+  'release-notes/RELEASE_NOTES_v',
+  'Current release note still contains Pending markers',
+]) {
+  check(releaseAudit.includes(auditGuard), `Release audit guard missing ${auditGuard}`);
+}
 
 for (const exportName of [
   'createAssistantTurn',

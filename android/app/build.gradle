@@ -114,8 +114,8 @@ android {
         applicationId 'com.fanshanng.aichatpocket'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 57
-        versionName "1.2.22"
+        versionCode 58
+        versionName "1.2.23"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
