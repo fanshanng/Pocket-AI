@@ -72,7 +72,13 @@ Get-FileHash -Algorithm SHA256 -LiteralPath E:\android\projects\ai-chat-pocket\a
 建议标题：
 
 ```text
-Pocket AI v1.2.0
+Pocket AI vX.Y.Z
+```
+
+建议先在仓库内写一份发布页草稿：
+
+```text
+release-notes/github-release-vX.Y.Z.md
 ```
 
 建议附件：

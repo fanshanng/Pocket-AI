@@ -91,6 +91,8 @@ This file is for starting a fresh Codex conversation without losing project cont
   - `icon-source.png.jpg` is the current source image for regenerated icon assets.
 - `RELEASE_CHECKLIST.md`
   - Per-release checklist for GitHub APK publishing.
+- `release-notes/`
+  - Per-version change/test records and GitHub Release page drafts. Add future `RELEASE_NOTES_vX.Y.Z.md` files here instead of the repository root.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt`
   - Native bridge for pending shared/dragged image URI events.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/MainActivity.kt`
