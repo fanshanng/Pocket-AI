@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.2.4` / Android `versionCode 39`.
+- Current version: `1.2.5` / Android `versionCode 40`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -56,6 +56,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.2 adds a first small theme-token cleanup for active/selected surfaces and strong action colors without changing layout, drawer gestures, or Markdown rendering.
 - v1.2.3 tightens the model picker bottom sheet header, refetch button, active model row, and API profile chips without changing the sheet animation, Modal layering, drawer gestures, or Markdown rendering.
 - v1.2.4 moves the attachment menu above the composer row and gives attachment actions a stable tap height so the menu is less likely to collide with Android navigation.
+- v1.2.5 adds Markdown regression fixtures and smoke guards for long formulas, latex/math fenced formulas, wide tables, table inline math/code, regular code blocks, and intentionally unclosed streaming Markdown.
 
 ## Key Files
 
@@ -187,7 +188,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.2.4 APK SHA-256:
+Current v1.2.5 APK SHA-256:
+
+```text
+C6154B7821A72533FB5AFB2ECE6EEDE03B84ADA22AB575E175C86110C96A1570
+```
+
+Previous v1.2.4 APK SHA-256:
 
 ```text
 8CBE1EEA2E85B84143BD9DAA8798821D971C977F100A12D850E126D3CA682F5C

@@ -17,9 +17,13 @@ const packageJson = JSON.parse(read('package.json'));
 const appJson = JSON.parse(read('app.json'));
 const index = read('index.ts');
 const app = read('App.tsx');
+const markdownRenderer = read('src/components/MarkdownRenderer.tsx');
+const messageBubble = read('src/components/MessageBubble.tsx');
+const codeBlock = read('src/components/CodeBlock.tsx');
 const openai = read('src/lib/openai.ts');
 const files = read('src/lib/files.ts');
 const storage = read('src/lib/storage.ts');
+const markdownRegression = read('scripts/fixtures/markdown-regression.md');
 const sharedImagesBridge = read('src/native/sharedImages.ts');
 const keyboardInsetsBridge = read('src/native/keyboardInsets.ts');
 const sharedImageModule = read('android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt');
@@ -71,5 +75,73 @@ check(keyboardInsetsBridge.includes("'KeyboardInsetsChanged'"), 'KeyboardInsets 
 check(manifest.includes('android.intent.action.SEND'), 'Android share intent missing');
 check(manifest.includes('android.intent.action.SEND_MULTIPLE'), 'Android multi-share intent missing');
 check(manifest.includes('android.permission.CAMERA'), 'Android camera permission missing');
+
+for (const marker of [
+  '<!-- case:long-block-math -->',
+  '<!-- case:latex-fenced-math -->',
+  '<!-- case:wide-table -->',
+  '<!-- case:table-inline-math-code -->',
+  '<!-- case:plain-code -->',
+  '<!-- case:unclosed-code-fence -->',
+  '<!-- case:unclosed-math -->',
+]) {
+  check(markdownRegression.includes(marker), `Markdown regression fixture missing ${marker}`);
+}
+
+const wideTableHeader = markdownRegression
+  .split('\n')
+  .find((line) => line.startsWith('| ID | Name | Formula |'));
+check(
+  !!wideTableHeader && wideTableHeader.split('|').filter((cell) => cell.trim()).length >= 10,
+  'Markdown regression wide table should keep at least 10 columns'
+);
+check(markdownRegression.includes('```latex'), 'Markdown regression fixture missing latex fenced math');
+check(markdownRegression.includes('```ts'), 'Markdown regression fixture missing plain TypeScript code fence');
+check(markdownRegression.includes('```python') && !markdownRegression.trimEnd().endsWith('```'), 'Markdown regression fixture should keep one intentionally unclosed fence');
+check(markdownRegression.includes('$a_i+b_i=c_i$'), 'Markdown regression fixture missing table inline math');
+check(markdownRegression.includes('`const value = list[i]`'), 'Markdown regression fixture missing table inline code');
+
+for (const sourceGuard of [
+  'function normalizeMarkdownForStreaming',
+  'fenceMatches.length % 2 === 1',
+  'function shouldRenderFenceAsMath',
+  'function isMathFenceLanguage',
+  "normalized === 'latex'",
+  "normalized === 'tex'",
+  "normalized === 'math'",
+  'function looksLikeLatexMath',
+  'markdownItWithMath',
+  'math_inline',
+  'math_block',
+  'BlockMathView',
+  'HorizontalScrollable',
+  'EagerHorizontalScrollable',
+  'getEstimatedTableWidth',
+  'tableCellText',
+]) {
+  check(markdownRenderer.includes(sourceGuard), `Markdown renderer guard missing ${sourceGuard}`);
+}
+
+check(
+  /code_block:[\s\S]*shouldRenderFenceAsMath[\s\S]*BlockMathView[\s\S]*CodeBlock/.test(markdownRenderer),
+  'Markdown code_block rule should preserve math-fence and code-block paths'
+);
+check(
+  /fence:[\s\S]*shouldRenderFenceAsMath[\s\S]*BlockMathView[\s\S]*CodeBlock/.test(markdownRenderer),
+  'Markdown fence rule should preserve math-fence and code-block paths'
+);
+check(
+  /table:[\s\S]*HorizontalScrollable[\s\S]*contentWidth=\{tableWidth\}/.test(markdownRenderer),
+  'Markdown table rule should preserve horizontal scroll with estimated width'
+);
+check(
+  messageBubble.includes('onHorizontalGestureStart={lockDrawerGesture}') &&
+    messageBubble.includes('onHorizontalGestureEnd={unlockDrawerGesture}'),
+  'MessageBubble should keep drawer gesture locking for Markdown horizontal scroll'
+);
+check(codeBlock.includes('Copy'), 'CodeBlock copy action missing');
+check(codeBlock.includes('Fullscreen code'), 'CodeBlock fullscreen action missing');
+check(codeBlock.includes('onScrollBeginDrag={onHorizontalGestureStart}'), 'CodeBlock horizontal gesture start hook missing');
+check(codeBlock.includes('onScrollEndDrag={onHorizontalGestureEnd}'), 'CodeBlock horizontal gesture end hook missing');
 
 console.log('Smoke checks passed');
