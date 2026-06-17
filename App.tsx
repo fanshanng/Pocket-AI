@@ -185,6 +185,8 @@ const MOTION_SETTLE_EASING = Easing.bezier(0.2, 0, 0, 1);
 const MOTION_EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
 const DRAWER_SETTLE_MIN_DURATION_MS = 170;
 const DRAWER_SETTLE_MAX_DURATION_MS = 320;
+const DRAWER_SCENE_SHIFT_MAX = 128;
+const DRAWER_SCENE_SHIFT_FRACTION = 0.22;
 const SHEET_OPEN_DURATION_MS = 260;
 const SHEET_CLOSE_DURATION_MS = 220;
 
@@ -440,7 +442,7 @@ export default function App() {
       windowWidth,
     ]
   );
-  const chatSceneTranslateX = 0;
+  const chatSceneTranslateX = mainSceneTranslateX;
   const settingsContentTranslateX = settingsContentProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [settingsContentMotion === 'rootEnter' ? -28 : 34, 0],
@@ -660,8 +662,10 @@ export default function App() {
   }, [mainSceneTranslateX, sessionDrawerTranslateX, sessionsVisible, windowWidth]);
 
   function getMainSceneXForDrawer(drawerX: number) {
-    void drawerX;
-    return 0;
+    const drawerWidth = sessionDrawerHiddenOffsetRef.current;
+    const openProgress = clampNumber(1 + drawerX / Math.max(1, drawerWidth), 0, 1);
+    const maxShift = Math.min(DRAWER_SCENE_SHIFT_MAX, windowWidth * DRAWER_SCENE_SHIFT_FRACTION);
+    return Math.round(maxShift * openProgress);
   }
 
   function setSessionDrawerPosition(nextX: number) {
@@ -728,7 +732,7 @@ export default function App() {
     const drawerX = open ? 0 : -sessionDrawerHiddenOffsetRef.current;
     sessionDrawerDragTargetRef.current = drawerX;
     sessionDrawerTranslateX.setValue(drawerX);
-    mainSceneTranslateX.setValue(0);
+    mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX));
     setSessionsVisible(open);
     if (!open) {
       setSessionSelectionMode(false);
@@ -792,19 +796,27 @@ export default function App() {
     );
     sessionDrawerDragTargetRef.current = toValue;
     mainSceneTranslateX.stopAnimation();
-    mainSceneTranslateX.setValue(0);
-    Animated.timing(sessionDrawerTranslateX, {
-      toValue,
-      duration,
-      easing: MOTION_SETTLE_EASING,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
+    const toSceneValue = getMainSceneXForDrawer(toValue);
+    Animated.parallel([
+      Animated.timing(sessionDrawerTranslateX, {
+        toValue,
+        duration,
+        easing: MOTION_SETTLE_EASING,
+        useNativeDriver: true,
+      }),
+      Animated.timing(mainSceneTranslateX, {
+        toValue: toSceneValue,
+        duration,
+        easing: MOTION_SETTLE_EASING,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
       if (!finished || sessionDrawerAnimationIdRef.current !== animationId) {
         return;
       }
       sessionDrawerTranslateX.setValue(toValue);
       sessionDrawerDragTargetRef.current = toValue;
-      mainSceneTranslateX.setValue(0);
+      mainSceneTranslateX.setValue(toSceneValue);
       onComplete?.();
     });
     return duration;

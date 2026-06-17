@@ -287,6 +287,15 @@ check(
   /function closeSessionsDrawer[\s\S]*animateSessionDrawerTo\(-sessionDrawerHiddenOffsetRef\.current, animationId, velocity[\s\S]*scheduleSessionDrawerFallback\(animationId, false, duration\)/.test(app),
   'Drawer close should settle with animation and a full-close fallback'
 );
+check(app.includes('const DRAWER_SCENE_SHIFT_MAX = 128'), 'Drawer push-style scene shift cap missing');
+check(app.includes('const DRAWER_SCENE_SHIFT_FRACTION = 0.22'), 'Drawer push-style scene shift fraction missing');
+check(app.includes('const chatSceneTranslateX = mainSceneTranslateX'), 'Main scene should translate with drawer progress');
+check(app.includes('function getMainSceneXForDrawer') && app.includes('openProgress'), 'Drawer scene translation should derive from drawer open progress');
+check(app.includes('mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX))'), 'Forced drawer states should also settle the main scene translation');
+check(
+  /Animated\.parallel\(\[[\s\S]*Animated\.timing\(sessionDrawerTranslateX[\s\S]*Animated\.timing\(mainSceneTranslateX/.test(app),
+  'Drawer settle animation should move the drawer and main scene together'
+);
 check(app.includes("isLooseDirectionalDelta(dx, dy, 'right', 56)"), 'Settings return swipe threshold should stay unchanged');
 check(app.includes('horizontalGestureLocked'), 'Horizontal gesture lock state missing');
 
