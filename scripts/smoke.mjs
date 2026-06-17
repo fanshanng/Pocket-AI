@@ -257,7 +257,8 @@ check(app.includes('composerLayoutLift'), 'Android composer layout lift missing'
 check(app.includes("Platform.OS === 'android' ? composerLayoutLift : 0"), 'Android composer lift should use layout margin for correct tap targets');
 
 for (const drawerGuard of [
-  'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',
+  'export const DRAWER_OPEN_EDGE_FRACTION = 0.18',
+  'export const DRAWER_OPEN_EDGE_MAX_WIDTH = 72',
   'export const DRAWER_SWIPE_SLOPE = 0.35',
   'export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 18',
   'export const DRAWER_OPEN_SWIPE_SLOPE = 1.1',
@@ -266,13 +267,18 @@ for (const drawerGuard of [
   'export function isLooseDirectionalSwipe',
   'export function isIntentionalDrawerOpenSwipe',
   'export function isSensitiveSessionCloseSwipe',
+  'export function getDrawerOpenEdgeWidth',
   'export function isWithinDrawerOpenEdge',
 ]) {
   check(drawerGestures.includes(drawerGuard), `Drawer gesture guard missing ${drawerGuard}`);
 }
 
 check(app.includes('isWithinDrawerOpenEdge(gestureState.x0, windowWidth)'), 'Drawer open edge should use centralized gesture strategy');
-check(app.includes('style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}'), 'Drawer open edge width should stay at the guarded fraction');
+check(drawerGestures.includes('Math.min(DRAWER_OPEN_EDGE_MAX_WIDTH, windowWidth * DRAWER_OPEN_EDGE_FRACTION)'), 'Drawer open edge should cap wide-screen hit area');
+check(app.includes('const drawerOpenTouchStartXRef = useRef(Number.POSITIVE_INFINITY)'), 'Drawer open gesture should track the real touch start X');
+check(app.includes('isWithinDrawerOpenEdge(drawerOpenTouchStartXRef.current, windowWidth)'), 'Drawer open gesture should reject non-edge touch starts');
+check(app.includes('const drawerOpenEdgeWidth = getDrawerOpenEdgeWidth(windowWidth)'), 'Drawer open edge visual width should use the capped strategy');
+check(app.includes('style={[styles.drawerOpenEdge, { width: drawerOpenEdgeWidth }]}'), 'Drawer open edge width should stay aligned with the guarded strategy');
 check(app.includes('pointerEvents="none"'), 'Drawer open edge visual layer should not intercept vertical message scrolling');
 check(app.includes('<View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>'), 'Drawer open responder should live on the chat scroll wrapper');
 check(app.includes('isIntentionalDrawerOpenSwipe(gestureState)'), 'Drawer open swipe should require intentional horizontal movement');

@@ -1,4 +1,5 @@
-export const DRAWER_OPEN_EDGE_FRACTION = 0.25;
+export const DRAWER_OPEN_EDGE_FRACTION = 0.18;
+export const DRAWER_OPEN_EDGE_MAX_WIDTH = 72;
 export const DRAWER_SWIPE_SLOPE = 0.35;
 export const DRAWER_SWIPE_MIN_DISTANCE = 5;
 export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 18;
@@ -72,6 +73,10 @@ export function isIntentionalDrawerOpenSwipe(gestureState: DrawerGestureSample):
   );
 }
 
+export function getDrawerOpenEdgeWidth(windowWidth: number): number {
+  return Math.min(DRAWER_OPEN_EDGE_MAX_WIDTH, windowWidth * DRAWER_OPEN_EDGE_FRACTION);
+}
+
 export function isWithinDrawerOpenEdge(x0: number, windowWidth: number): boolean {
-  return x0 <= windowWidth * DRAWER_OPEN_EDGE_FRACTION;
+  return x0 <= getDrawerOpenEdgeWidth(windowWidth);
 }

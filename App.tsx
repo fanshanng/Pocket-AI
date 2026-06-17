@@ -79,7 +79,7 @@ import {
   upsertConversation,
 } from './src/lib/conversations';
 import {
-  DRAWER_OPEN_EDGE_FRACTION,
+  getDrawerOpenEdgeWidth,
   isLooseDirectionalDelta,
   isIntentionalDrawerOpenSwipe,
   isSensitiveSessionCloseSwipe,
@@ -242,6 +242,7 @@ export default function App() {
   const sessionDrawerSettleFrameRef = useRef<number | null>(null);
   const sessionDrawerSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDrawerDragTargetRef = useRef(-Math.max(1, Math.min(windowWidth, 520)));
+  const drawerOpenTouchStartXRef = useRef(Number.POSITIVE_INFINITY);
   const sessionsVisibleRef = useRef(false);
   const drawerGestureOpeningRef = useRef(false);
   const suppressNextSessionPressRef = useRef<string | null>(null);
@@ -391,10 +392,23 @@ export default function App() {
         if (!isWithinDrawerOpenEdge(gestureState.x0, windowWidth)) {
           return false;
         }
+        if (!isWithinDrawerOpenEdge(drawerOpenTouchStartXRef.current, windowWidth)) {
+          return false;
+        }
         return isIntentionalDrawerOpenSwipe(gestureState);
       };
 
       return PanResponder.create({
+        onStartShouldSetPanResponderCapture: (event) => {
+          const pageX = event.nativeEvent.pageX ?? event.nativeEvent.locationX;
+          drawerOpenTouchStartXRef.current = pageX;
+          return false;
+        },
+        onStartShouldSetPanResponder: (event) => {
+          const pageX = event.nativeEvent.pageX ?? event.nativeEvent.locationX;
+          drawerOpenTouchStartXRef.current = pageX;
+          return false;
+        },
         onMoveShouldSetPanResponderCapture: (_, gestureState) =>
           shouldStartDrawerOpenGesture(gestureState),
         onMoveShouldSetPanResponder: (_, gestureState) =>
@@ -417,6 +431,7 @@ export default function App() {
         },
         onPanResponderRelease: (_, gestureState) => {
           drawerGestureOpeningRef.current = false;
+          drawerOpenTouchStartXRef.current = Number.POSITIVE_INFINITY;
           if (gestureState.dx > windowWidth * 0.14 || gestureState.vx > 0.38) {
             openSessionsDrawer(gestureState.vx);
             return;
@@ -425,6 +440,7 @@ export default function App() {
         },
         onPanResponderTerminate: () => {
           drawerGestureOpeningRef.current = false;
+          drawerOpenTouchStartXRef.current = Number.POSITIVE_INFINITY;
           closeSessionsDrawer(true);
         },
         onPanResponderTerminationRequest: () => false,
@@ -458,6 +474,7 @@ export default function App() {
   const sessionSearchNeedsRaise = sessionSearchQuery.length > 28 || sessionSearchQuery.includes('\n');
   const sessionSearchIsRaised = sessionSearchRaised && sessionSearchNeedsRaise;
   const drawerBlankSwipeFooterHeight = visibleConversations.length < 6 ? Math.max(180, windowHeight * 0.28) : 56;
+  const drawerOpenEdgeWidth = getDrawerOpenEdgeWidth(windowWidth);
   const modelPickerSheetHeight = Math.max(
     320,
     Math.round(Math.min(windowHeight - modalTopInset, Math.max(420, windowHeight * 0.7)))
@@ -3094,7 +3111,7 @@ export default function App() {
               {!settingsVisible && !modelPickerVisible && !chatMenuVisible && (
                 <View
                   pointerEvents="none"
-                  style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}
+                  style={[styles.drawerOpenEdge, { width: drawerOpenEdgeWidth }]}
                 />
               )}
               <ScrollView
