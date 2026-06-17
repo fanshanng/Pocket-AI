@@ -353,6 +353,7 @@ export default function App() {
           sessionDrawerAnimationIdRef.current += 1;
           sessionDrawerClosingRef.current = false;
           drawerGestureOpeningRef.current = false;
+          clearSessionDrawerFallbackTimer();
           cancelSessionDrawerSettleFrame();
           cancelSessionDrawerDragFrame();
           sessionDrawerTranslateX.stopAnimation();
@@ -363,10 +364,10 @@ export default function App() {
         },
         onPanResponderRelease: (_, gestureState) => {
           if (gestureState.dx < -windowWidth * 0.16 || gestureState.vx < -0.28) {
-            closeSessionsDrawer(false);
+            closeSessionsDrawer(true, gestureState.vx);
             return;
           }
-          openSessionsDrawer();
+          openSessionsDrawer(gestureState.vx);
         },
         onPanResponderTerminate: () => {
           openSessionsDrawer();
@@ -401,6 +402,7 @@ export default function App() {
         onPanResponderGrant: () => {
           sessionDrawerAnimationIdRef.current += 1;
           drawerGestureOpeningRef.current = true;
+          clearSessionDrawerFallbackTimer();
           cancelSessionDrawerSettleFrame();
           cancelSessionDrawerDragFrame();
           sessionDrawerTranslateX.stopAnimation();
@@ -416,14 +418,14 @@ export default function App() {
         onPanResponderRelease: (_, gestureState) => {
           drawerGestureOpeningRef.current = false;
           if (gestureState.dx > windowWidth * 0.14 || gestureState.vx > 0.38) {
-            openSessionsDrawer();
+            openSessionsDrawer(gestureState.vx);
             return;
           }
-          closeSessionsDrawer(false);
+          closeSessionsDrawer(true, gestureState.vx);
         },
         onPanResponderTerminate: () => {
           drawerGestureOpeningRef.current = false;
-          closeSessionsDrawer(false);
+          closeSessionsDrawer(true);
         },
         onPanResponderTerminationRequest: () => false,
       });
@@ -697,7 +699,25 @@ export default function App() {
     }
   }
 
+  function clearSessionDrawerFallbackTimer() {
+    if (sessionDrawerCloseFallbackRef.current) {
+      clearTimeout(sessionDrawerCloseFallbackRef.current);
+      sessionDrawerCloseFallbackRef.current = null;
+    }
+  }
+
+  function scheduleSessionDrawerFallback(animationId: number, open: boolean, duration: number) {
+    clearSessionDrawerFallbackTimer();
+    sessionDrawerCloseFallbackRef.current = setTimeout(() => {
+      sessionDrawerCloseFallbackRef.current = null;
+      if (sessionDrawerAnimationIdRef.current === animationId) {
+        forceSessionDrawerState(open);
+      }
+    }, Math.max(120, duration + 140));
+  }
+
   function forceSessionDrawerState(open: boolean) {
+    clearSessionDrawerFallbackTimer();
     cancelSessionDrawerSettleFrame();
     cancelSessionDrawerDragFrame();
     sessionDrawerAnimationIdRef.current += 1;
@@ -2614,30 +2634,43 @@ export default function App() {
   }
 
   function openSessionsDrawer(velocity = 0) {
-    void velocity;
     cancelSessionDrawerSnapTimer();
     setChatMenuVisible(false);
     setAttachmentMenuVisible(false);
     cancelSessionDrawerSettleFrame();
     cancelSessionDrawerDragFrame();
-    if (sessionDrawerCloseFallbackRef.current) {
-      clearTimeout(sessionDrawerCloseFallbackRef.current);
-      sessionDrawerCloseFallbackRef.current = null;
-    }
-    forceSessionDrawerState(true);
+    clearSessionDrawerFallbackTimer();
+    const animationId = sessionDrawerAnimationIdRef.current + 1;
+    sessionDrawerAnimationIdRef.current = animationId;
+    sessionDrawerClosingRef.current = false;
+    drawerGestureOpeningRef.current = false;
+    setSessionsVisible(true);
+    const duration = animateSessionDrawerTo(0, animationId, velocity, () => {
+      clearSessionDrawerFallbackTimer();
+      forceSessionDrawerState(true);
+    });
+    scheduleSessionDrawerFallback(animationId, true, duration);
   }
 
   function closeSessionsDrawer(animate = true, velocity = 0) {
-    void animate;
-    void velocity;
     cancelSessionDrawerSnapTimer();
-    if (sessionDrawerCloseFallbackRef.current) {
-      clearTimeout(sessionDrawerCloseFallbackRef.current);
-      sessionDrawerCloseFallbackRef.current = null;
-    }
+    clearSessionDrawerFallbackTimer();
     cancelSessionDrawerSettleFrame();
     cancelSessionDrawerDragFrame();
-    forceSessionDrawerState(false);
+    if (!animate) {
+      forceSessionDrawerState(false);
+      return;
+    }
+
+    const animationId = sessionDrawerAnimationIdRef.current + 1;
+    sessionDrawerAnimationIdRef.current = animationId;
+    sessionDrawerClosingRef.current = true;
+    drawerGestureOpeningRef.current = false;
+    const duration = animateSessionDrawerTo(-sessionDrawerHiddenOffsetRef.current, animationId, velocity, () => {
+      clearSessionDrawerFallbackTimer();
+      forceSessionDrawerState(false);
+    });
+    scheduleSessionDrawerFallback(animationId, false, duration);
   }
 
   function openSettingsFromSessions() {

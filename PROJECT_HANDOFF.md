@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.1` / Android `versionCode 64`.
+- Current version: `1.3.2` / Android `versionCode 65`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -81,6 +81,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.27 reverts the v1.2.26 formula directional-drag experiment after device testing showed vertical drags over formulas were still captured; formula horizontal scrolling is restored to the v1.2.25 behavior.
 - v1.3.0 publishes the latest v1.2.27 stable behavior as the next minor release without runtime behavior changes.
 - v1.3.1 fixes the left-edge drawer opener so the visual left-quarter edge no longer intercepts vertical message scrolling; the drawer now opens only after a clear horizontal right swipe that starts in the left edge.
+- v1.3.2 restores left drawer open/close settling animations while keeping fallback snaps to fully open/closed states so interrupted gestures do not leave the drawer half-open.
 
 ## Key Files
 
@@ -230,7 +231,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.1 APK SHA-256:
+Current v1.3.2 APK SHA-256:
+
+```text
+EE9C8027CD0243066963A8A2DFC7403107A50812BFEF5D4D311E07D41169B6CD
+```
+
+Previous v1.3.1 APK SHA-256:
 
 ```text
 A85196EF5F2A592D5DE22A6C4D080912AEB025F421C3D91E52E3D476CAD4793D

@@ -277,6 +277,16 @@ check(app.includes('pointerEvents="none"'), 'Drawer open edge visual layer shoul
 check(app.includes('<View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>'), 'Drawer open responder should live on the chat scroll wrapper');
 check(app.includes('isIntentionalDrawerOpenSwipe(gestureState)'), 'Drawer open swipe should require intentional horizontal movement');
 check(drawerGestures.includes('absX > Math.max(DRAWER_OPEN_SWIPE_MIN_DISTANCE, absY * DRAWER_OPEN_SWIPE_SLOPE)'), 'Drawer open swipe should prefer vertical scrolling unless horizontal intent is clear');
+check(app.includes('function clearSessionDrawerFallbackTimer'), 'Drawer animation fallback timer helper missing');
+check(app.includes('function scheduleSessionDrawerFallback'), 'Drawer animation fallback snap helper missing');
+check(
+  /function openSessionsDrawer[\s\S]*animateSessionDrawerTo\(0, animationId, velocity[\s\S]*scheduleSessionDrawerFallback\(animationId, true, duration\)/.test(app),
+  'Drawer open should settle with animation and a full-open fallback'
+);
+check(
+  /function closeSessionsDrawer[\s\S]*animateSessionDrawerTo\(-sessionDrawerHiddenOffsetRef\.current, animationId, velocity[\s\S]*scheduleSessionDrawerFallback\(animationId, false, duration\)/.test(app),
+  'Drawer close should settle with animation and a full-close fallback'
+);
 check(app.includes("isLooseDirectionalDelta(dx, dy, 'right', 56)"), 'Settings return swipe threshold should stay unchanged');
 check(app.includes('horizontalGestureLocked'), 'Horizontal gesture lock state missing');
 
