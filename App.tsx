@@ -185,8 +185,6 @@ const MOTION_SETTLE_EASING = Easing.bezier(0.2, 0, 0, 1);
 const MOTION_EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
 const DRAWER_SETTLE_MIN_DURATION_MS = 170;
 const DRAWER_SETTLE_MAX_DURATION_MS = 320;
-const DRAWER_SCENE_SHIFT_MAX = 128;
-const DRAWER_SCENE_SHIFT_FRACTION = 0.22;
 const SHEET_OPEN_DURATION_MS = 260;
 const SHEET_CLOSE_DURATION_MS = 220;
 
@@ -663,9 +661,8 @@ export default function App() {
 
   function getMainSceneXForDrawer(drawerX: number) {
     const drawerWidth = sessionDrawerHiddenOffsetRef.current;
-    const openProgress = clampNumber(1 + drawerX / Math.max(1, drawerWidth), 0, 1);
-    const maxShift = Math.min(DRAWER_SCENE_SHIFT_MAX, windowWidth * DRAWER_SCENE_SHIFT_FRACTION);
-    return Math.round(maxShift * openProgress);
+    // Keep the drawer and chat surface on one horizontal canvas: closed = 0, open = drawer width.
+    return Math.round(clampNumber(drawerWidth + drawerX, 0, drawerWidth));
   }
 
   function setSessionDrawerPosition(nextX: number) {
@@ -3832,7 +3829,14 @@ export default function App() {
             />
           </Animated.View>
           <Animated.View
-            style={[styles.drawerBackdrop, { width: sessionDrawerWidth, transform: [{ translateX: sessionDrawerTranslateX }] }]}
+            style={[
+              styles.drawerBackdrop,
+              {
+                left: -sessionDrawerWidth,
+                width: sessionDrawerWidth,
+                transform: [{ translateX: chatSceneTranslateX }],
+              },
+            ]}
             {...sessionDrawerPanResponder.panHandlers}
           >
             <SafeAreaView

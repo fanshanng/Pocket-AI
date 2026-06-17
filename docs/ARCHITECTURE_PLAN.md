@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.3.3`.
+Current version: `v1.3.4`.
 
 ## Refactor Rules
 
@@ -120,4 +120,5 @@ Prefer explicit import/export boundaries:
 - `v1.3.1`: Move the left-edge drawer opener off the transparent overlay and require a clear horizontal swipe so vertical message scrolling still works in the left quarter, especially in landscape.
 - `v1.3.2`: Restore drawer open/close settling animations while keeping fallback snaps so interrupted gestures cannot leave the drawer half-open.
 - `v1.3.3`: Add a bounded push-style main scene translation during drawer open/close so the chat surface moves with the drawer without restoring the old half-open behavior.
+- `v1.3.4`: Replace the bounded drawer push with a shared-canvas motion model where the menu sits left of the chat surface and both translate together while opening and closing.
 - `v1.3.x`: Add network search profile settings behind provider capability checks.
