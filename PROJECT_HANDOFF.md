@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.4` / Android `versionCode 67`.
+- Current version: `1.3.5` / Android `versionCode 68`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -84,6 +84,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.3.2 restores left drawer open/close settling animations while keeping fallback snaps to fully open/closed states so interrupted gestures do not leave the drawer half-open.
 - v1.3.3 adds a bounded push-style main scene translation during drawer open/close so the chat surface moves with the drawer while retaining the v1.3.1 strict edge-swipe gate and v1.3.2 fallback snaps.
 - v1.3.4 changes the left drawer to a shared-canvas motion model: the drawer sits to the left of the chat surface, and both move together during open and close while keeping the existing gesture thresholds and fallback snaps.
+- v1.3.5 optimizes drawer smoothness by moving the drawer and chat into one horizontal animated canvas, removing the old independent drawer overlay layer while keeping the same gesture thresholds.
 
 ## Key Files
 
@@ -233,7 +234,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.4 APK SHA-256:
+Current v1.3.5 APK SHA-256:
+
+```text
+883DAB647703270EE1C779D42E9214BD1A019CAD4BC78C734C85399F1EEFAC1B
+```
+
+Previous v1.3.4 APK SHA-256:
 
 ```text
 4CFFAE5DA2B08A1206E01641DBFC746C6BA4190EBB3F78F47F956E5D54AAB00B

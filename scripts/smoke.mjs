@@ -293,8 +293,16 @@ check(
   'Drawer scene translation should move the full drawer width'
 );
 check(
-  /left:\s*-sessionDrawerWidth[\s\S]*transform:\s*\[\{ translateX: chatSceneTranslateX \}\]/.test(app),
-  'Drawer panel should sit left of the chat surface and move with the shared scene'
+  /styles\.drawerSceneCanvas[\s\S]*left:\s*-sessionDrawerWidth[\s\S]*width:\s*windowWidth \+ sessionDrawerWidth[\s\S]*transform:\s*\[\{ translateX: chatSceneTranslateX \}\]/.test(app),
+  'Drawer and chat should live inside one translated canvas'
+);
+check(
+  app.includes('function renderSessionDrawerPanel()') && app.includes('style={[styles.drawerBackdrop, { width: sessionDrawerWidth }]}'),
+  'Drawer panel should render as the first column inside the shared canvas'
+);
+check(
+  !app.includes('drawerModalRoot'),
+  'Drawer should not use the old independent overlay root'
 );
 check(app.includes('mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX))'), 'Forced drawer states should also settle the main scene translation');
 check(

@@ -3019,10 +3019,184 @@ export default function App() {
   const themedMutedText = { color: theme.muted };
   const themedSubtleText = { color: theme.subtle };
 
+  function renderSessionDrawerPanel() {
+    return (
+      <View
+        style={[styles.drawerBackdrop, { width: sessionDrawerWidth }]}
+        {...sessionDrawerPanResponder.panHandlers}
+      >
+        <SafeAreaView
+          style={[styles.sessionDrawer, { backgroundColor: theme.surface }]}
+        >
+          <View style={[styles.drawerHeader, { paddingTop: drawerTopInset }]}>
+            <View style={styles.drawerHeaderActions}>
+              <Pressable
+                style={[
+                  styles.drawerIconButton,
+                  {
+                    backgroundColor: sessionSearchVisible ? theme.primarySoft : theme.surface,
+                    borderColor: sessionSearchVisible ? theme.primary : theme.border,
+                  },
+                ]}
+                onPress={toggleSessionSearch}
+                accessibilityRole="button"
+                accessibilityLabel={copy.sessionSearchPlaceholder}
+              >
+                <SearchIcon color={theme.text} />
+              </Pressable>
+              <Pressable
+                style={[styles.drawerIconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={openSettingsFromSessions}
+                accessibilityRole="button"
+                accessibilityLabel={copy.settings}
+              >
+                <SettingsIcon color={theme.text} />
+              </Pressable>
+            </View>
+          </View>
+
+          <SlideFadePresence visible={sessionSearchVisible} from="top" style={styles.drawerSearchWrap}>
+              {sessionSearchNeedsRaise && (
+                <Pressable
+                  style={[styles.drawerSearchRaiseButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => setSessionSearchRaised((raised) => !raised)}
+                  accessibilityRole="button"
+                  accessibilityLabel={copy.expandComposer}
+                >
+                  <DirectionIcon direction={sessionSearchIsRaised ? 'down' : 'up'} color={theme.muted} />
+                </Pressable>
+              )}
+              <TextInput
+                value={sessionSearchQuery}
+                onChangeText={setSessionSearchQuery}
+                style={[
+                  styles.drawerSearchInput,
+                  sessionSearchNeedsRaise && styles.drawerSearchInputWithRaise,
+                  sessionSearchIsRaised && styles.drawerSearchInputRaised,
+                  { backgroundColor: theme.surfaceAlt, borderColor: theme.border, color: theme.text },
+                ]}
+                placeholder={copy.sessionSearchPlaceholder}
+                placeholderTextColor={theme.placeholder}
+                autoFocus
+                multiline={sessionSearchIsRaised}
+                scrollEnabled={sessionSearchIsRaised}
+                textAlignVertical="top"
+              />
+          </SlideFadePresence>
+
+          <View style={styles.drawerSectionHeader}>
+            <View style={styles.drawerSectionTitleWrap}>
+              <Text style={[styles.drawerSectionLabel, { color: theme.text }]}>{copy.recordsSection}</Text>
+            </View>
+            <Pressable
+              style={[
+                styles.drawerHeaderButton,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+                sessionSelectionMode && [styles.drawerHeaderButtonActive, themedSelected],
+                persisted.conversations.length === 0 && styles.disabledAction,
+              ]}
+              onPress={toggleSessionSelectionMode}
+              disabled={persisted.conversations.length === 0}
+            >
+              <Text
+                style={[
+                  styles.drawerHeaderButtonText,
+                  { color: theme.subtle },
+                  sessionSelectionMode && { color: theme.primary },
+                ]}
+              >
+                {sessionSelectionMode ? copy.cancelSelection : copy.selectSessions}
+              </Text>
+            </Pressable>
+            {sessionSelectionMode && (
+              <Pressable
+                style={[styles.drawerCopyButton, selectedSessionIds.length === 0 && styles.disabledAction]}
+                onPress={() => {
+                  promptCopySelectedSessionExports();
+                }}
+                disabled={selectedSessionIds.length === 0}
+              >
+                <Text style={styles.drawerCopyButtonText}>{copy.copySelectedSessions}</Text>
+              </Pressable>
+            )}
+            {sessionSelectionMode && (
+              <Pressable
+                style={[styles.drawerDeleteButton, selectedSessionIds.length === 0 && styles.disabledAction]}
+                onPress={confirmDeleteSelectedSessions}
+                disabled={selectedSessionIds.length === 0}
+              >
+                <Text style={styles.drawerDeleteButtonText}>{copy.deleteSelectedSessions}</Text>
+              </Pressable>
+            )}
+          </View>
+          {sessionSelectionMode && (
+            <Text style={[styles.drawerSelectionText, { color: theme.muted }]}>{copy.selectedSessionsCount(selectedSessionIds.length)}</Text>
+          )}
+
+          <FlatList
+            {...sessionDrawerPanResponder.panHandlers}
+            style={styles.drawerHistoryScroll}
+            contentContainerStyle={styles.drawerHistoryContent}
+            data={visibleConversations}
+            keyExtractor={(conversation) => conversation.id}
+            renderItem={renderDrawerSession}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            initialNumToRender={10}
+            maxToRenderPerBatch={8}
+            updateCellsBatchingPeriod={50}
+            windowSize={7}
+            removeClippedSubviews={Platform.OS === 'android'}
+            ListFooterComponent={
+              <View
+                collapsable={false}
+                style={[styles.drawerHistoryFooterSwipeArea, { minHeight: drawerBlankSwipeFooterHeight }]}
+                {...sessionDrawerPanResponder.panHandlers}
+              />
+            }
+            ListEmptyComponent={
+              <Text style={[styles.emptySessionText, { color: theme.muted }]}>
+                {persisted.conversations.length === 0 ? copy.sessionsEmpty : copy.sessionsNoMatches}
+              </Text>
+            }
+          />
+
+          <Pressable
+            style={[
+              styles.drawerNewChatButton,
+              {
+                backgroundColor: theme.actionStrong,
+                shadowColor: isDark ? '#000000' : '#0F172A',
+              },
+            ]}
+            onPress={createNewSession}
+          >
+            <PlusIcon light />
+            <Text style={[styles.drawerNewChatText, { color: theme.actionStrongText }]}>{copy.newSession}</Text>
+          </Pressable>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <LinearGradient colors={theme.gradient} style={styles.root}>
         <StatusBar barStyle={theme.statusBar} />
-      <Animated.View style={[styles.mainScene, { transform: [{ translateX: chatSceneTranslateX }] }]}>
+      <Animated.View
+        style={[
+          styles.drawerSceneCanvas,
+          {
+            left: -sessionDrawerWidth,
+            width: windowWidth + sessionDrawerWidth,
+            transform: [{ translateX: chatSceneTranslateX }],
+          },
+        ]}
+      >
+        {sessionsVisible ? renderSessionDrawerPanel() : (
+          <View pointerEvents="none" style={[styles.drawerSpacer, { width: sessionDrawerWidth }]} />
+        )}
+      <View style={[styles.mainScene, { width: windowWidth }]}>
         <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -3242,6 +3416,19 @@ export default function App() {
           </DrawerGestureContext.Provider>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </View>
+        {sessionsVisible && (
+          <View
+            pointerEvents="box-none"
+            style={[styles.drawerMainDismissLayer, { left: sessionDrawerWidth, width: windowWidth }]}
+          >
+            <Pressable
+              style={styles.drawerUnderlayPressable}
+              onPress={() => closeSessionsDrawer()}
+              {...sessionDrawerPanResponder.panHandlers}
+            />
+          </View>
+        )}
       </Animated.View>
 
       <Modal visible={settingsVisible} animationType="none" transparent statusBarTranslucent onRequestClose={goBackFromSettings}>
@@ -3816,184 +4003,6 @@ export default function App() {
         </SafeAreaView>
       </Modal>
 
-      {sessionsVisible && (
-        <View
-          style={styles.drawerModalRoot}
-          pointerEvents="box-none"
-        >
-          <Animated.View style={[styles.drawerMainDismissLayer, { transform: [{ translateX: chatSceneTranslateX }] }]}>
-            <Pressable
-              style={styles.drawerUnderlayPressable}
-              onPress={() => closeSessionsDrawer()}
-              {...sessionDrawerPanResponder.panHandlers}
-            />
-          </Animated.View>
-          <Animated.View
-            style={[
-              styles.drawerBackdrop,
-              {
-                left: -sessionDrawerWidth,
-                width: sessionDrawerWidth,
-                transform: [{ translateX: chatSceneTranslateX }],
-              },
-            ]}
-            {...sessionDrawerPanResponder.panHandlers}
-          >
-            <SafeAreaView
-              style={[styles.sessionDrawer, { backgroundColor: theme.surface }]}
-            >
-              <View style={[styles.drawerHeader, { paddingTop: drawerTopInset }]}>
-                <View style={styles.drawerHeaderActions}>
-                  <Pressable
-                    style={[
-                      styles.drawerIconButton,
-                      {
-                        backgroundColor: sessionSearchVisible ? theme.primarySoft : theme.surface,
-                        borderColor: sessionSearchVisible ? theme.primary : theme.border,
-                      },
-                    ]}
-                    onPress={toggleSessionSearch}
-                    accessibilityRole="button"
-                    accessibilityLabel={copy.sessionSearchPlaceholder}
-                  >
-                    <SearchIcon color={theme.text} />
-                  </Pressable>
-                  <Pressable
-                    style={[styles.drawerIconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                    onPress={openSettingsFromSessions}
-                    accessibilityRole="button"
-                    accessibilityLabel={copy.settings}
-                  >
-                    <SettingsIcon color={theme.text} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <SlideFadePresence visible={sessionSearchVisible} from="top" style={styles.drawerSearchWrap}>
-                  {sessionSearchNeedsRaise && (
-                    <Pressable
-                      style={[styles.drawerSearchRaiseButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                      onPress={() => setSessionSearchRaised((raised) => !raised)}
-                      accessibilityRole="button"
-                      accessibilityLabel={copy.expandComposer}
-                    >
-                      <DirectionIcon direction={sessionSearchIsRaised ? 'down' : 'up'} color={theme.muted} />
-                    </Pressable>
-                  )}
-                  <TextInput
-                    value={sessionSearchQuery}
-                    onChangeText={setSessionSearchQuery}
-                    style={[
-                      styles.drawerSearchInput,
-                      sessionSearchNeedsRaise && styles.drawerSearchInputWithRaise,
-                      sessionSearchIsRaised && styles.drawerSearchInputRaised,
-                      { backgroundColor: theme.surfaceAlt, borderColor: theme.border, color: theme.text },
-                    ]}
-                    placeholder={copy.sessionSearchPlaceholder}
-                    placeholderTextColor={theme.placeholder}
-                    autoFocus
-                    multiline={sessionSearchIsRaised}
-                    scrollEnabled={sessionSearchIsRaised}
-                    textAlignVertical="top"
-                  />
-              </SlideFadePresence>
-
-              <View style={styles.drawerSectionHeader}>
-                <View style={styles.drawerSectionTitleWrap}>
-                  <Text style={[styles.drawerSectionLabel, { color: theme.text }]}>{copy.recordsSection}</Text>
-                </View>
-                <Pressable
-                  style={[
-                    styles.drawerHeaderButton,
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                    sessionSelectionMode && [styles.drawerHeaderButtonActive, themedSelected],
-                    persisted.conversations.length === 0 && styles.disabledAction,
-                  ]}
-                  onPress={toggleSessionSelectionMode}
-                  disabled={persisted.conversations.length === 0}
-                >
-                  <Text
-                    style={[
-                      styles.drawerHeaderButtonText,
-                      { color: theme.subtle },
-                      sessionSelectionMode && { color: theme.primary },
-                    ]}
-                  >
-                    {sessionSelectionMode ? copy.cancelSelection : copy.selectSessions}
-                  </Text>
-                </Pressable>
-                {sessionSelectionMode && (
-                  <Pressable
-                    style={[styles.drawerCopyButton, selectedSessionIds.length === 0 && styles.disabledAction]}
-                    onPress={() => {
-                      promptCopySelectedSessionExports();
-                    }}
-                    disabled={selectedSessionIds.length === 0}
-                  >
-                    <Text style={styles.drawerCopyButtonText}>{copy.copySelectedSessions}</Text>
-                  </Pressable>
-                )}
-                {sessionSelectionMode && (
-                  <Pressable
-                    style={[styles.drawerDeleteButton, selectedSessionIds.length === 0 && styles.disabledAction]}
-                    onPress={confirmDeleteSelectedSessions}
-                    disabled={selectedSessionIds.length === 0}
-                  >
-                    <Text style={styles.drawerDeleteButtonText}>{copy.deleteSelectedSessions}</Text>
-                  </Pressable>
-                )}
-              </View>
-              {sessionSelectionMode && (
-                <Text style={[styles.drawerSelectionText, { color: theme.muted }]}>{copy.selectedSessionsCount(selectedSessionIds.length)}</Text>
-              )}
-
-              <FlatList
-                {...sessionDrawerPanResponder.panHandlers}
-                style={styles.drawerHistoryScroll}
-                contentContainerStyle={styles.drawerHistoryContent}
-                data={visibleConversations}
-                keyExtractor={(conversation) => conversation.id}
-                renderItem={renderDrawerSession}
-                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                initialNumToRender={10}
-                maxToRenderPerBatch={8}
-                updateCellsBatchingPeriod={50}
-                windowSize={7}
-                removeClippedSubviews={Platform.OS === 'android'}
-                ListFooterComponent={
-                  <View
-                    collapsable={false}
-                    style={[styles.drawerHistoryFooterSwipeArea, { minHeight: drawerBlankSwipeFooterHeight }]}
-                    {...sessionDrawerPanResponder.panHandlers}
-                  />
-                }
-                ListEmptyComponent={
-                  <Text style={[styles.emptySessionText, { color: theme.muted }]}>
-                    {persisted.conversations.length === 0 ? copy.sessionsEmpty : copy.sessionsNoMatches}
-                  </Text>
-                }
-              />
-
-              <Pressable
-                style={[
-                  styles.drawerNewChatButton,
-                  {
-                    backgroundColor: theme.actionStrong,
-                    shadowColor: isDark ? '#000000' : '#0F172A',
-                  },
-                ]}
-                onPress={createNewSession}
-              >
-                <PlusIcon light />
-                <Text style={[styles.drawerNewChatText, { color: theme.actionStrongText }]}>{copy.newSession}</Text>
-              </Pressable>
-            </SafeAreaView>
-          </Animated.View>
-        </View>
-      )}
-
       <Modal
         visible={selectedExportMenuVisible}
         animationType="fade"
@@ -4183,9 +4192,18 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
+  drawerSceneCanvas: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    zIndex: 1,
+  },
+  drawerSpacer: {
+    height: '100%',
+  },
   mainScene: {
     flex: 1,
-    zIndex: 1,
   },
   safeArea: {
     flex: 1,
@@ -4518,15 +4536,7 @@ const styles = StyleSheet.create({
     left: 0,
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
   },
-  drawerModalRoot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 20,
-    backgroundColor: 'transparent',
-  },  drawerUnderlayPressable: {
+  drawerUnderlayPressable: {
     position: 'absolute',
     top: 0,
     right: 0,
@@ -4536,17 +4546,12 @@ const styles = StyleSheet.create({
   drawerMainDismissLayer: {
     position: 'absolute',
     top: 0,
-    right: 0,
     bottom: 0,
-    left: 0,
-    zIndex: 21,
+    zIndex: 5,
   },
   drawerBackdrop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 22,
+    height: '100%',
+    zIndex: 4,
     backgroundColor: '#FFFFFF',
     shadowColor: '#0F172A',
     shadowOpacity: 0.12,
