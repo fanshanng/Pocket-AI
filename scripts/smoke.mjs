@@ -259,9 +259,12 @@ check(app.includes("Platform.OS === 'android' ? composerLayoutLift : 0"), 'Andro
 for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.25',
   'export const DRAWER_SWIPE_SLOPE = 0.35',
+  'export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 18',
+  'export const DRAWER_OPEN_SWIPE_SLOPE = 1.1',
   'export const SESSION_CLOSE_SWIPE_SLOPE = 0.65',
   'export const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14',
   'export function isLooseDirectionalSwipe',
+  'export function isIntentionalDrawerOpenSwipe',
   'export function isSensitiveSessionCloseSwipe',
   'export function isWithinDrawerOpenEdge',
 ]) {
@@ -270,7 +273,10 @@ for (const drawerGuard of [
 
 check(app.includes('isWithinDrawerOpenEdge(gestureState.x0, windowWidth)'), 'Drawer open edge should use centralized gesture strategy');
 check(app.includes('style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}'), 'Drawer open edge width should stay at the guarded fraction');
-check(app.includes("isLooseDirectionalSwipe(gestureState, 'right', 7)"), 'Drawer open swipe threshold should stay unchanged');
+check(app.includes('pointerEvents="none"'), 'Drawer open edge visual layer should not intercept vertical message scrolling');
+check(app.includes('<View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>'), 'Drawer open responder should live on the chat scroll wrapper');
+check(app.includes('isIntentionalDrawerOpenSwipe(gestureState)'), 'Drawer open swipe should require intentional horizontal movement');
+check(drawerGestures.includes('absX > Math.max(DRAWER_OPEN_SWIPE_MIN_DISTANCE, absY * DRAWER_OPEN_SWIPE_SLOPE)'), 'Drawer open swipe should prefer vertical scrolling unless horizontal intent is clear');
 check(app.includes("isLooseDirectionalDelta(dx, dy, 'right', 56)"), 'Settings return swipe threshold should stay unchanged');
 check(app.includes('horizontalGestureLocked'), 'Horizontal gesture lock state missing');
 

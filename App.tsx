@@ -29,6 +29,7 @@ import type {
   GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  PanResponderGestureState,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -80,7 +81,7 @@ import {
 import {
   DRAWER_OPEN_EDGE_FRACTION,
   isLooseDirectionalDelta,
-  isLooseDirectionalSwipe,
+  isIntentionalDrawerOpenSwipe,
   isSensitiveSessionCloseSwipe,
   isWithinDrawerOpenEdge,
 } from './src/lib/drawerGestures';
@@ -339,6 +340,8 @@ export default function App() {
   sessionsVisibleRef.current = sessionsVisible;
   sessionDrawerHiddenOffsetRef.current = sessionDrawerWidth;
   settingsPanelHiddenOffsetRef.current = Math.max(windowWidth, 320);
+  void horizontalGestureLockVersion;
+  const horizontalGestureLocked = drawerGestureLockCountRef.current > 0;
   const sessionDrawerPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -373,22 +376,28 @@ export default function App() {
     [sessionDrawerTranslateX, windowWidth]
   );
   const chatOpenDrawerPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          if (
-            sessionsVisible ||
-            settingsVisible ||
-            modelPickerVisible ||
-            chatMenuVisible
-          ) {
-            return false;
-          }
-          if (!isWithinDrawerOpenEdge(gestureState.x0, windowWidth)) {
-            return false;
-          }
-          return isLooseDirectionalSwipe(gestureState, 'right', 7);
-        },
+    () => {
+      const shouldStartDrawerOpenGesture = (gestureState: PanResponderGestureState) => {
+        if (
+          sessionsVisible ||
+          settingsVisible ||
+          modelPickerVisible ||
+          chatMenuVisible ||
+          horizontalGestureLocked
+        ) {
+          return false;
+        }
+        if (!isWithinDrawerOpenEdge(gestureState.x0, windowWidth)) {
+          return false;
+        }
+        return isIntentionalDrawerOpenSwipe(gestureState);
+      };
+
+      return PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          shouldStartDrawerOpenGesture(gestureState),
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          shouldStartDrawerOpenGesture(gestureState),
         onPanResponderGrant: () => {
           sessionDrawerAnimationIdRef.current += 1;
           drawerGestureOpeningRef.current = true;
@@ -417,9 +426,11 @@ export default function App() {
           closeSessionsDrawer(false);
         },
         onPanResponderTerminationRequest: () => false,
-      }),
+      });
+    },
     [
       chatMenuVisible,
+      horizontalGestureLocked,
       modelPickerVisible,
       sessionDrawerTranslateX,
       sessionsVisible,
@@ -449,8 +460,6 @@ export default function App() {
     320,
     Math.round(Math.min(windowHeight - modalTopInset, Math.max(420, windowHeight * 0.7)))
   );
-  void horizontalGestureLockVersion;
-  const horizontalGestureLocked = drawerGestureLockCountRef.current > 0;
   const lockDrawerGesture = useCallback(() => {
     drawerGestureLockCountRef.current += 1;
     setHorizontalGestureLockVersion((value) => value + 1);
@@ -3039,12 +3048,11 @@ export default function App() {
 
           <DrawerGestureContext.Provider value={drawerGestureContextValue}>
           <View style={styles.chatShell}>
-            <View style={styles.chatScrollWrap}>
+            <View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>
               {!settingsVisible && !modelPickerVisible && !chatMenuVisible && (
                 <View
-                  pointerEvents="box-only"
+                  pointerEvents="none"
                   style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}
-                  {...chatOpenDrawerPanResponder.panHandlers}
                 />
               )}
               <ScrollView

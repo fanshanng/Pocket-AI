@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.0` / Android `versionCode 63`.
+- Current version: `1.3.1` / Android `versionCode 64`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -80,6 +80,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.2.26 changes block formulas to a formula-only directional drag layer so clear horizontal drags pan long formulas while vertical drags can remain with the message list.
 - v1.2.27 reverts the v1.2.26 formula directional-drag experiment after device testing showed vertical drags over formulas were still captured; formula horizontal scrolling is restored to the v1.2.25 behavior.
 - v1.3.0 publishes the latest v1.2.27 stable behavior as the next minor release without runtime behavior changes.
+- v1.3.1 fixes the left-edge drawer opener so the visual left-quarter edge no longer intercepts vertical message scrolling; the drawer now opens only after a clear horizontal right swipe that starts in the left edge.
 
 ## Key Files
 
@@ -179,8 +180,8 @@ Recommended next tasks:
    Keep framework work small: extract presentational pieces first, then hooks, then provider capabilities.
 2. Split `App.tsx`.
    Extract `ChatScreen`, `Composer`, `SettingsScreen`, `ModelPickerSheet`, `SessionDrawer`, `AttachmentMenu`, and related hooks in separate patch versions.
-3. Publish v1.3.0 from the latest stable 1.2-series build.
-   Reuse the final release notes/checklist, create the tag/release manually, and attach the verified APK.
+3. Continue v1.3.x patches from the current published baseline.
+   Keep gesture and Markdown changes isolated, build standalone release APKs for device testing, and update local release records before syncing.
 4. Provider-specific features.
    Use `src/lib/providerCapabilities.ts` before adding future web search, generated files, or provider-specific request parameters.
 5. Rich generated files.
@@ -229,7 +230,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.0 APK SHA-256:
+Current v1.3.1 APK SHA-256:
+
+```text
+A85196EF5F2A592D5DE22A6C4D080912AEB025F421C3D91E52E3D476CAD4793D
+```
+
+Previous v1.3.0 APK SHA-256:
 
 ```text
 BA190AD8DA21B9DBB82B164CAC48536F3C2345D9EB63B52C61F063411F6B735D
