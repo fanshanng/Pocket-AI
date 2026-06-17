@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.6` / Android `versionCode 69`.
+- Current version: `1.3.7` / Android `versionCode 70`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -84,8 +84,8 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.3.2 restores left drawer open/close settling animations while keeping fallback snaps to fully open/closed states so interrupted gestures do not leave the drawer half-open.
 - v1.3.3 adds a bounded push-style main scene translation during drawer open/close so the chat surface moves with the drawer while retaining the v1.3.1 strict edge-swipe gate and v1.3.2 fallback snaps.
 - v1.3.4 changes the left drawer to a shared-canvas motion model: the drawer sits to the left of the chat surface, and both move together during open and close while keeping the existing gesture thresholds and fallback snaps.
-- v1.3.5 optimizes drawer smoothness by moving the drawer and chat into one horizontal animated canvas, removing the old independent drawer overlay layer while keeping the same gesture thresholds.
-- v1.3.6 migrates the left drawer drag path to `react-native-gesture-handler` plus Reanimated shared values so the shared drawer/chat canvas follows the finger on the UI thread while preserving existing open/close fallbacks.
+- v1.3.5 and v1.3.6 tried smoother drawer implementations but were rejected after device testing because the drag feel was worse.
+- v1.3.7 reverts the drawer implementation back to the v1.3.4 shared-canvas behavior while keeping the app version moving forward for install/update compatibility.
 
 ## Key Files
 
@@ -235,7 +235,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.6 APK SHA-256:
+Current v1.3.7 APK SHA-256:
+
+```text
+9E7CC7647B624B32EE6B9A164EA8C7E5783B375855EE231402C9130FCE0EA533
+```
+
+Previous v1.3.6 APK SHA-256:
 
 ```text
 EDADF729C0765DB5A2511D24B0C00D6971D57EE1BB8F2E1EF40F0C102722ADCA

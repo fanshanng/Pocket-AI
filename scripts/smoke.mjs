@@ -40,11 +40,8 @@ const manifest = read('android/app/src/main/AndroidManifest.xml');
 check(packageJson.main === 'index.ts', 'package.json main should remain index.ts');
 check(packageJson.scripts?.['release:audit'] === 'node scripts/release-audit.mjs', 'Release audit script should stay wired in package.json');
 check(String(packageJson.dependencies.expo ?? '').startsWith('~56.'), 'Expo SDK should remain version 56');
-check(packageJson.dependencies['react-native-reanimated'], 'Reanimated dependency missing');
-check(packageJson.dependencies['react-native-worklets'], 'React Native Worklets dependency missing');
 check(appJson.expo?.android?.package === 'com.fanshanng.aichatpocket', 'Android package name changed');
-check(index.includes('registerRootComponent(Root)'), 'Root component registration missing');
-check(index.includes('GestureHandlerRootView'), 'RNGH root view should wrap the app');
+check(index.includes("registerRootComponent(App)"), 'Root component registration missing');
 for (const auditGuard of [
   'assertReleaseNoteShape',
   'assertForbiddenUploadFiles',
@@ -274,17 +271,11 @@ for (const drawerGuard of [
   check(drawerGestures.includes(drawerGuard), `Drawer gesture guard missing ${drawerGuard}`);
 }
 
+check(app.includes('isWithinDrawerOpenEdge(gestureState.x0, windowWidth)'), 'Drawer open edge should use centralized gesture strategy');
 check(app.includes('style={[styles.drawerOpenEdge, { width: windowWidth * DRAWER_OPEN_EDGE_FRACTION }]}'), 'Drawer open edge width should stay at the guarded fraction');
 check(app.includes('pointerEvents="none"'), 'Drawer open edge visual layer should not intercept vertical message scrolling');
-check(app.includes('<GestureDetector gesture={drawerOpenGesture}>'), 'Drawer open gesture should use GestureDetector');
-check(app.includes('<GestureDetector gesture={drawerCloseGesture}>'), 'Drawer close gesture should use GestureDetector');
-check(app.includes('const drawerSceneTranslateX = useSharedValue(0)'), 'Drawer scene should use a Reanimated shared value');
-check(app.includes('const drawerSceneAnimatedStyle = useAnimatedStyle'), 'Drawer scene should use an animated Reanimated style');
-check(app.includes('Gesture.Pan()') && app.includes('.activeOffsetX(DRAWER_OPEN_SWIPE_MIN_DISTANCE)'), 'Drawer open swipe should require intentional horizontal movement');
-check(app.includes('runOnJS(finishReanimatedDrawerOpenGesture)') && app.includes('runOnJS(finishReanimatedDrawerCloseGesture)'), 'Drawer gesture completion should return to JS drawer state helpers');
-check(app.includes('function syncDrawerSceneForReanimatedGesture'), 'Reanimated drawer gestures should sync their final scene position back to JS state');
-check(!app.includes('chatOpenDrawerPanResponder'), 'Old drawer open PanResponder should not be used');
-check(!app.includes('sessionDrawerPanResponder'), 'Old drawer close PanResponder should not be used');
+check(app.includes('<View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>'), 'Drawer open responder should live on the chat scroll wrapper');
+check(app.includes('isIntentionalDrawerOpenSwipe(gestureState)'), 'Drawer open swipe should require intentional horizontal movement');
 check(drawerGestures.includes('absX > Math.max(DRAWER_OPEN_SWIPE_MIN_DISTANCE, absY * DRAWER_OPEN_SWIPE_SLOPE)'), 'Drawer open swipe should prefer vertical scrolling unless horizontal intent is clear');
 check(app.includes('function clearSessionDrawerFallbackTimer'), 'Drawer animation fallback timer helper missing');
 check(app.includes('function scheduleSessionDrawerFallback'), 'Drawer animation fallback snap helper missing');
@@ -296,27 +287,16 @@ check(
   /function closeSessionsDrawer[\s\S]*animateSessionDrawerTo\(-sessionDrawerHiddenOffsetRef\.current, animationId, velocity[\s\S]*scheduleSessionDrawerFallback\(animationId, false, duration\)/.test(app),
   'Drawer close should settle with animation and a full-close fallback'
 );
+check(app.includes('const chatSceneTranslateX = mainSceneTranslateX'), 'Main scene should translate with drawer progress');
 check(
   app.includes('return Math.round(clampNumber(drawerWidth + drawerX, 0, drawerWidth))'),
   'Drawer scene translation should move the full drawer width'
 );
 check(
-  /styles\.drawerSceneCanvas[\s\S]*left:\s*-sessionDrawerWidth[\s\S]*width:\s*windowWidth \+ sessionDrawerWidth[\s\S]*drawerSceneAnimatedStyle/.test(app),
-  'Drawer and chat should live inside one Reanimated translated canvas'
+  /left:\s*-sessionDrawerWidth[\s\S]*transform:\s*\[\{ translateX: chatSceneTranslateX \}\]/.test(app),
+  'Drawer panel should sit left of the chat surface and move with the shared scene'
 );
-check(
-  app.includes('function renderSessionDrawerPanel()') && app.includes('style={[styles.drawerBackdrop, { width: sessionDrawerWidth }]}'),
-  'Drawer panel should render as the first column inside the shared canvas'
-);
-check(
-  app.includes('{renderSessionDrawerPanel()}'),
-  'Drawer panel should stay mounted so the first drag frame is not blank'
-);
-check(
-  !app.includes('drawerModalRoot'),
-  'Drawer should not use the old independent overlay root'
-);
-check(app.includes('drawerSceneTranslateX.value = sceneX'), 'Forced drawer states should also settle the Reanimated scene translation');
+check(app.includes('mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX))'), 'Forced drawer states should also settle the main scene translation');
 check(
   /Animated\.parallel\(\[[\s\S]*Animated\.timing\(sessionDrawerTranslateX[\s\S]*Animated\.timing\(mainSceneTranslateX/.test(app),
   'Drawer settle animation should move the drawer and main scene together'
