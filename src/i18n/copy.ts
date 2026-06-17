@@ -35,6 +35,8 @@ export type LanguageCopy = {
   attachmentCacheStatsFailed: string;
   aboutSection: string;
   createdBy: string;
+  maintainerLabel: string;
+  earlyContributorLabel: string;
   themeSection: string;
   themeLight: string;
   themeDark: string;
@@ -187,7 +189,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     refreshingAttachmentCacheStats: '刷新中...',
     attachmentCacheStatsFailed: '无法读取附件缓存统计。',
     aboutSection: '关于',
-    createdBy: '共创维护',
+    createdBy: '维护与协助',
+    maintainerLabel: '当前维护与 v1.1.0 之后版本',
+    earlyContributorLabel: '早期协助：v1.0.0 - v1.1.0',
     themeSection: '外观',
     themeLight: '浅色',
     themeDark: '深色',
@@ -340,7 +344,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     refreshingAttachmentCacheStats: 'Refreshing...',
     attachmentCacheStatsFailed: 'Unable to read attachment cache stats.',
     aboutSection: 'About',
-    createdBy: 'Co-maintainers',
+    createdBy: 'Maintainer and contributors',
+    maintainerLabel: 'Current maintainer and post-v1.1.0 releases',
+    earlyContributorLabel: 'Early help: v1.0.0 - v1.1.0',
     themeSection: 'Appearance',
     themeLight: 'Light',
     themeDark: 'Dark',

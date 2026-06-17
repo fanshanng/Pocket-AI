@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.8` / Android `versionCode 71`.
+- Current version: `1.3.9` / Android `versionCode 72`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -87,6 +87,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.3.5 and v1.3.6 tried smoother drawer implementations but were rejected after device testing because the drag feel was worse.
 - v1.3.7 reverts the drawer implementation back to the v1.3.4 shared-canvas behavior while keeping the app version moving forward for install/update compatibility.
 - v1.3.8 fixes the closed-state drawer opener so right swipes from the middle or right side of the screen no longer open the drawer; the opener now uses a capped left-edge width and a recorded touch-start X check.
+- v1.3.9 restores a quicker older-style left drawer open threshold while preserving the v1.3.8 capped edge-start guard, and clarifies the About page contribution boundaries.
 
 ## Key Files
 
@@ -236,10 +237,10 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.8 APK SHA-256:
+Current v1.3.9 APK SHA-256:
 
 ```text
-D721E0AE94B3598948C80C354D7D072749CD23F309FC235834C462D137697AFB
+BCB7EB3704FA6BEEAE0FC5086AB90671CF82F066A872E473B149671BFAE8B4C7
 ```
 
 Previous v1.3.7 APK SHA-256:

@@ -260,8 +260,8 @@ for (const drawerGuard of [
   'export const DRAWER_OPEN_EDGE_FRACTION = 0.18',
   'export const DRAWER_OPEN_EDGE_MAX_WIDTH = 72',
   'export const DRAWER_SWIPE_SLOPE = 0.35',
-  'export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 18',
-  'export const DRAWER_OPEN_SWIPE_SLOPE = 1.1',
+  'export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 16',
+  'export const DRAWER_OPEN_SWIPE_SLOPE = 1.35',
   'export const SESSION_CLOSE_SWIPE_SLOPE = 0.65',
   'export const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14',
   'export function isLooseDirectionalSwipe',
@@ -282,7 +282,8 @@ check(app.includes('style={[styles.drawerOpenEdge, { width: drawerOpenEdgeWidth 
 check(app.includes('pointerEvents="none"'), 'Drawer open edge visual layer should not intercept vertical message scrolling');
 check(app.includes('<View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>'), 'Drawer open responder should live on the chat scroll wrapper');
 check(app.includes('isIntentionalDrawerOpenSwipe(gestureState)'), 'Drawer open swipe should require intentional horizontal movement');
-check(drawerGestures.includes('absX > Math.max(DRAWER_OPEN_SWIPE_MIN_DISTANCE, absY * DRAWER_OPEN_SWIPE_SLOPE)'), 'Drawer open swipe should prefer vertical scrolling unless horizontal intent is clear');
+check(drawerGestures.includes('absX > absY * DRAWER_OPEN_SWIPE_SLOPE'), 'Drawer open swipe should keep the older quick feel after clear horizontal intent');
+check(drawerGestures.includes('message-list vertical scrolling keeps priority'), 'Drawer open swipe should document the vertical-scroll boundary');
 check(app.includes('function clearSessionDrawerFallbackTimer'), 'Drawer animation fallback timer helper missing');
 check(app.includes('function scheduleSessionDrawerFallback'), 'Drawer animation fallback snap helper missing');
 check(

@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.3.8`.
+Current version: `v1.3.9`.
 
 ## Refactor Rules
 
@@ -125,4 +125,5 @@ Prefer explicit import/export boundaries:
 - `v1.3.6`: Tried RNGH/Reanimated drawer dragging; rejected after device testing because the feel was worse.
 - `v1.3.7`: Revert drawer behavior back to the v1.3.4 shared-canvas implementation while preserving forward version/install compatibility.
 - `v1.3.8`: Fix closed-state drawer false positives by capping the left-edge opener and double-checking the recorded touch-start X.
+- `v1.3.9`: Tune the left drawer opener toward the older quick swipe feel while keeping the capped edge-start guard, and clarify About-page contribution boundaries.
 - `v1.3.x`: Add network search profile settings behind provider capability checks.

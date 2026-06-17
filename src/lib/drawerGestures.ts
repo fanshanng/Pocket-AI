@@ -2,9 +2,9 @@ export const DRAWER_OPEN_EDGE_FRACTION = 0.18;
 export const DRAWER_OPEN_EDGE_MAX_WIDTH = 72;
 export const DRAWER_SWIPE_SLOPE = 0.35;
 export const DRAWER_SWIPE_MIN_DISTANCE = 5;
-export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 18;
-export const DRAWER_OPEN_SWIPE_SLOPE = 1.1;
-export const DRAWER_OPEN_SWIPE_FAST_VELOCITY = 0.42;
+export const DRAWER_OPEN_SWIPE_MIN_DISTANCE = 16;
+export const DRAWER_OPEN_SWIPE_SLOPE = 1.35;
+export const DRAWER_OPEN_SWIPE_FAST_VELOCITY = 0.38;
 export const SESSION_CLOSE_SWIPE_SLOPE = 0.65;
 export const SESSION_CLOSE_SWIPE_MIN_DISTANCE = 14;
 
@@ -65,10 +65,10 @@ export function isIntentionalDrawerOpenSwipe(gestureState: DrawerGestureSample):
   const absY = Math.abs(gestureState.dy);
   const fastRightSwipe = (gestureState.vx ?? 0) > DRAWER_OPEN_SWIPE_FAST_VELOCITY;
 
-  // Edge swipes start over the message list, so require a clear horizontal
-  // intent before taking the responder away from normal vertical scrolling.
+  // Keep the older quick drawer feel, but only after a clear edge-started
+  // horizontal intent so message-list vertical scrolling keeps priority.
   return (
-    absX > Math.max(DRAWER_OPEN_SWIPE_MIN_DISTANCE, absY * DRAWER_OPEN_SWIPE_SLOPE) ||
+    absX > absY * DRAWER_OPEN_SWIPE_SLOPE ||
     (fastRightSwipe && absX > absY * 0.8)
   );
 }

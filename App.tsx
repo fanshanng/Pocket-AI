@@ -3711,14 +3711,24 @@ export default function App() {
                         onPress={() => openExternalUrl('https://github.com/fanshanng')}
                       >
                         <GitHubIcon color={theme.text} />
-                        <Text style={[styles.contactText, { color: theme.subtle }]}>fanshanng</Text>
+                        <View style={styles.contactTextBlock}>
+                          <Text style={[styles.contactText, { color: theme.subtle }]}>fanshanng</Text>
+                          <Text style={[styles.contactRoleText, { color: theme.muted }]}>
+                            {copy.maintainerLabel}
+                          </Text>
+                        </View>
                       </Pressable>
                       <Pressable
                         style={[styles.contactChip, { backgroundColor: theme.surface, borderColor: theme.border }]}
                         onPress={() => openExternalUrl('https://github.com/HDdssX')}
                       >
                         <GitHubIcon color={theme.text} />
-                        <Text style={[styles.contactText, { color: theme.subtle }]}>HDdss</Text>
+                        <View style={styles.contactTextBlock}>
+                          <Text style={[styles.contactText, { color: theme.subtle }]}>HDdssX</Text>
+                          <Text style={[styles.contactRoleText, { color: theme.muted }]}>
+                            {copy.earlyContributorLabel}
+                          </Text>
+                        </View>
                       </Pressable>
                     </View>
                   </View>
@@ -4575,7 +4585,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     paddingTop: Platform.OS === 'android' ? 20 : 8,
-  },  modalDismissArea: {
+  },
+  modalDismissArea: {
     flex: 1,
     width: '100%',
   },
@@ -5201,16 +5212,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    borderRadius: 999,
+    width: '100%',
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#D8E0EA',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },  contactText: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  contactTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  contactText: {
     color: '#334155',
     fontSize: 12,
     fontWeight: '800',
+  },
+  contactRoleText: {
+    marginTop: 3,
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 15,
   },
   profileChipRow: {
     gap: 8,
