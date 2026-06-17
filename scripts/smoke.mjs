@@ -191,10 +191,16 @@ check(app.includes('hasDraftBaseUrl(draft)'), 'API profile save should use edita
 check(app.includes('sanitizeEditableProfileDraft(updated)'), 'API draft updates should use editable draft sanitization');
 check(app.includes('copy.baseUrlRequiredMessage'), 'API Base URL required prompt missing');
 check(profileDrafts.includes('export function hasDraftBaseUrl'), 'API draft Base URL helper missing');
+check(profileDrafts.includes('export function hasDraftProfileLabel'), 'API draft profile label helper missing');
 check(profileDrafts.includes('export function sanitizeEditableProfileDraft'), 'API editable draft sanitizer missing');
+check(app.includes('hasDraftProfileLabel(draft)'), 'API profile save should allow temporary empty profile labels');
 check(
   profileDrafts.includes('baseUrl: hasDraftBaseUrl(profile) ? sanitized.baseUrl : profile.baseUrl'),
   'API editable draft sanitizer should preserve temporary empty Base URL values'
+);
+check(
+  profileDrafts.includes('label: hasDraftProfileLabel(profile) ? sanitized.label : profile.label'),
+  'API editable draft sanitizer should preserve temporary empty profile labels'
 );
 check(profileDrafts.includes('persisted profiles still use sanitizeProfile'), 'API draft sanitizer audit comment missing');
 for (const capabilityGuard of [

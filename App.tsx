@@ -148,6 +148,7 @@ import {
 } from './src/lib/profiles';
 import {
   hasDraftBaseUrl,
+  hasDraftProfileLabel,
   sanitizeEditableProfileDraft,
 } from './src/lib/profileDrafts';
 import {
@@ -1620,6 +1621,10 @@ export default function App() {
       if (options.requireBaseUrl) {
         Alert.alert(copy.baseUrlRequiredTitle, copy.baseUrlRequiredMessage);
       }
+      return undefined;
+    }
+    if (!hasDraftProfileLabel(draft)) {
+      // Let users clear a profile name before pasting a replacement; saved profiles still require a non-empty label.
       return undefined;
     }
 
