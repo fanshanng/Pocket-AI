@@ -32,5 +32,5 @@ Base URL：https://api.openai.com/v1
 
 ## 开发记录
 
-- 每个小版本的改动和测试记录保存在 `release-notes/`。
+- 发布说明请查看 GitHub Releases 页面。
 - 当前架构梳理和后续拆分计划保存在 `docs/ARCHITECTURE_PLAN.md`。

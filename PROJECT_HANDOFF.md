@@ -128,7 +128,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - `scripts/release-audit.mjs`
   - Final release consistency audit for version numbers, current release notes, README shape, upload-folder forbidden files, and 1.3.0 planning visibility.
 - `release-notes/`
-  - Per-version change/test records and GitHub Release page drafts. Add future `RELEASE_NOTES_vX.Y.Z.md` files here instead of the repository root.
+  - Local-only per-version change/test records and GitHub Release page drafts. Keep it ignored in `ai-chat-pocket-git` so the public repo stays small.
 - `docs/ARCHITECTURE_PLAN.md`
   - Current architecture map, refactor rules, target layers, and staged version queue for future framework work.
 - `android/app/src/main/java/com/fanshanng/aichatpocket/SharedImageModule.kt`

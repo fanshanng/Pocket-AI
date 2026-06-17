@@ -46,8 +46,10 @@ for (const auditGuard of [
   'assertReleaseNoteShape',
   'assertForbiddenUploadFiles',
   'README should not contain a Download section',
+  'README should not point to local-only release-notes/',
   'release-notes/RELEASE_NOTES_v',
   'Current release note still contains Pending markers',
+  'release-notes/',
 ]) {
   check(releaseAudit.includes(auditGuard), `Release audit guard missing ${auditGuard}`);
 }

@@ -10,7 +10,7 @@ This document keeps the long-term architecture direction visible without mixing 
 - `src/lib/files.ts` owns attachment picking, copying, size validation, cache statistics, cleanup, and shared-image persistence.
 - `src/lib/storage.ts` owns encrypted persisted state and SecureStore API key helpers.
 - `src/lib/conversations.ts` owns conversation creation, sorting, searching, attachment collection, and Markdown/JSON export formatting.
-- `release-notes/` is the per-version audit trail. Future release notes and GitHub release drafts should stay there.
+- `release-notes/` is the local-only per-version audit trail. It is ignored in the upload folder; public release summaries should be written on GitHub Release pages.
 
 ## Stable Baseline
 

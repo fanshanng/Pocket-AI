@@ -101,7 +101,8 @@ function assertRecentReleaseNotesHaveStandardShape() {
 function assertReadmeIsReleasePageClean() {
   const readme = read('README.md');
   check(!/^##\s*(下载|Download)\b/im.test(readme), 'README should not contain a Download section');
-  check(readme.includes('release-notes/'), 'README should point version records to release-notes/');
+  check(!readme.includes('release-notes/'), 'README should not point to local-only release-notes/');
+  check(readme.includes('GitHub Releases'), 'README should point public release notes to GitHub Releases');
 }
 
 function assertForbiddenUploadFiles(version) {
@@ -170,6 +171,7 @@ for (const requiredIgnore of [
   'android/app/build/',
   'android/keystore.properties',
   'LOCAL_PRIVATE/',
+  'release-notes/',
   '*.jks',
   '*.keystore',
 ]) {
