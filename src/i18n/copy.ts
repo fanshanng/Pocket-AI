@@ -37,6 +37,9 @@ export type LanguageCopy = {
   createdBy: string;
   maintainerLabel: string;
   earlyContributorLabel: string;
+  drawerLabTitle: string;
+  drawerLabDescription: string;
+  openDrawerLab: string;
   themeSection: string;
   themeLight: string;
   themeDark: string;
@@ -192,6 +195,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     createdBy: '维护与协助',
     maintainerLabel: '当前维护与 v1.1.0 之后版本',
     earlyContributorLabel: '早期协助：v1.0.0 - v1.1.0',
+    drawerLabTitle: '抽屉手势实验',
+    drawerLabDescription: '隔离测试现成 DrawerLayout 的快滑、慢滑、上下滚动和横向滚动手感；不会替换当前聊天抽屉。',
+    openDrawerLab: '打开 Drawer Lab',
     themeSection: '外观',
     themeLight: '浅色',
     themeDark: '深色',
@@ -347,6 +353,9 @@ export const COPY: Record<UiLanguage, LanguageCopy> = {
     createdBy: 'Maintainer and contributors',
     maintainerLabel: 'Current maintainer and post-v1.1.0 releases',
     earlyContributorLabel: 'Early help: v1.0.0 - v1.1.0',
+    drawerLabTitle: 'Drawer gesture lab',
+    drawerLabDescription: 'Test the built-in DrawerLayout feel in isolation before replacing the real chat drawer.',
+    openDrawerLab: 'Open Drawer Lab',
     themeSection: 'Appearance',
     themeLight: 'Light',
     themeDark: 'Dark',

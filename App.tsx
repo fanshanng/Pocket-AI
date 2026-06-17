@@ -58,6 +58,7 @@ import {
   TrashIcon,
 } from './src/components/AppIcons';
 import { DrawerGestureContext } from './src/components/DrawerGestureContext';
+import { DrawerGestureLab } from './src/components/DrawerGestureLab';
 import { MessageBubble } from './src/components/MessageBubble';
 import { ModelPickerContent } from './src/components/ModelPickerContent';
 import { PendingAttachmentBar } from './src/components/PendingAttachmentBar';
@@ -280,6 +281,7 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [chatMenuVisible, setChatMenuVisible] = useState(false);
+  const [drawerLabVisible, setDrawerLabVisible] = useState(false);
   const [sessionsVisible, setSessionsVisible] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [bottomSheetMode, setBottomSheetMode] = useState<'models' | null>(null);
@@ -3733,6 +3735,18 @@ export default function App() {
                     </View>
                   </View>
                   <View style={[styles.infoPanel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+                    <Text style={[styles.infoPanelTitle, { color: theme.text }]}>{copy.drawerLabTitle}</Text>
+                    <Text style={[styles.infoPanelText, { color: theme.muted }]}>{copy.drawerLabDescription}</Text>
+                    <Pressable
+                      style={[styles.inlineUtilityButton, themedPanel, styles.versionCheckButton]}
+                      onPress={() => setDrawerLabVisible(true)}
+                    >
+                      <Text style={[styles.inlineUtilityButtonText, { color: theme.primary }]}>
+                        {copy.openDrawerLab}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View style={[styles.infoPanel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
                     <Text style={[styles.infoPanelTitle, { color: theme.text }]}>{copy.versionLabel}</Text>
                     <Text style={[styles.infoPanelText, { color: theme.muted }]}>v{APP_VERSION}</Text>
                     <Pressable
@@ -4201,6 +4215,13 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      <DrawerGestureLab
+        visible={drawerLabVisible}
+        language={uiLanguage}
+        theme={theme}
+        onClose={() => setDrawerLabVisible(false)}
+      />
     </LinearGradient>
   );
 }
