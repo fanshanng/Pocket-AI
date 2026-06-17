@@ -9,7 +9,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Image,
   Linking,
   Platform,
@@ -29,10 +28,20 @@ import type {
   GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  PanResponderGestureState,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Gesture,
+  GestureDetector,
+} from 'react-native-gesture-handler';
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   Camera,
   FileText,
@@ -80,10 +89,12 @@ import {
 } from './src/lib/conversations';
 import {
   DRAWER_OPEN_EDGE_FRACTION,
+  DRAWER_OPEN_SWIPE_FAST_VELOCITY,
+  DRAWER_OPEN_SWIPE_MIN_DISTANCE,
+  DRAWER_OPEN_SWIPE_SLOPE,
   isLooseDirectionalDelta,
-  isIntentionalDrawerOpenSwipe,
-  isSensitiveSessionCloseSwipe,
-  isWithinDrawerOpenEdge,
+  SESSION_CLOSE_SWIPE_MIN_DISTANCE,
+  SESSION_CLOSE_SWIPE_SLOPE,
 } from './src/lib/drawerGestures';
 import {
   type AttachmentCacheStats,
@@ -185,6 +196,7 @@ const MOTION_SETTLE_EASING = Easing.bezier(0.2, 0, 0, 1);
 const MOTION_EXIT_EASING = Easing.bezier(0.4, 0, 1, 1);
 const DRAWER_SETTLE_MIN_DURATION_MS = 170;
 const DRAWER_SETTLE_MAX_DURATION_MS = 320;
+const REANIMATED_DRAWER_SETTLE_EASING = ReanimatedEasing.bezier(0.2, 0, 0, 1);
 const SHEET_OPEN_DURATION_MS = 260;
 const SHEET_CLOSE_DURATION_MS = 220;
 
@@ -234,6 +246,10 @@ export default function App() {
   const handledSharedImageUrisRef = useRef(new Set<string>());
   const mainSceneTranslateX = useRef(new Animated.Value(0)).current;
   const sessionDrawerTranslateX = useRef(new Animated.Value(-Math.max(1, Math.min(windowWidth, 520)))).current;
+  // The drawer drag is driven on the UI thread so the shared canvas can follow the finger while JS is busy.
+  const drawerSceneTranslateX = useSharedValue(0);
+  const drawerWidthShared = useSharedValue(Math.max(1, Math.min(windowWidth, 520)));
+  const windowWidthShared = useSharedValue(windowWidth);
   const sessionDrawerHiddenOffsetRef = useRef(360);
   const sessionDrawerAnimationIdRef = useRef(0);
   const sessionDrawerClosingRef = useRef(false);
@@ -339,108 +355,15 @@ export default function App() {
   const sessionDrawerWidth = Math.max(1, Math.min(windowWidth, 520));
   sessionsVisibleRef.current = sessionsVisible;
   sessionDrawerHiddenOffsetRef.current = sessionDrawerWidth;
+  drawerWidthShared.value = sessionDrawerWidth;
+  windowWidthShared.value = windowWidth;
   settingsPanelHiddenOffsetRef.current = Math.max(windowWidth, 320);
   void horizontalGestureLockVersion;
   const horizontalGestureLocked = drawerGestureLockCountRef.current > 0;
-  const sessionDrawerPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-          isSensitiveSessionCloseSwipe(gestureState),
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          isSensitiveSessionCloseSwipe(gestureState),
-        onPanResponderGrant: () => {
-          sessionDrawerAnimationIdRef.current += 1;
-          sessionDrawerClosingRef.current = false;
-          drawerGestureOpeningRef.current = false;
-          clearSessionDrawerFallbackTimer();
-          cancelSessionDrawerSettleFrame();
-          cancelSessionDrawerDragFrame();
-          sessionDrawerTranslateX.stopAnimation();
-          mainSceneTranslateX.stopAnimation();
-        },
-        onPanResponderMove: (_, gestureState) => {
-          setSessionDrawerPosition(Math.max(-sessionDrawerHiddenOffsetRef.current, Math.min(0, gestureState.dx)));
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -windowWidth * 0.16 || gestureState.vx < -0.28) {
-            closeSessionsDrawer(true, gestureState.vx);
-            return;
-          }
-          openSessionsDrawer(gestureState.vx);
-        },
-        onPanResponderTerminate: () => {
-          openSessionsDrawer();
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [sessionDrawerTranslateX, windowWidth]
-  );
-  const chatOpenDrawerPanResponder = useMemo(
-    () => {
-      const shouldStartDrawerOpenGesture = (gestureState: PanResponderGestureState) => {
-        if (
-          sessionsVisible ||
-          settingsVisible ||
-          modelPickerVisible ||
-          chatMenuVisible ||
-          horizontalGestureLocked
-        ) {
-          return false;
-        }
-        if (!isWithinDrawerOpenEdge(gestureState.x0, windowWidth)) {
-          return false;
-        }
-        return isIntentionalDrawerOpenSwipe(gestureState);
-      };
-
-      return PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-          shouldStartDrawerOpenGesture(gestureState),
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          shouldStartDrawerOpenGesture(gestureState),
-        onPanResponderGrant: () => {
-          sessionDrawerAnimationIdRef.current += 1;
-          drawerGestureOpeningRef.current = true;
-          clearSessionDrawerFallbackTimer();
-          cancelSessionDrawerSettleFrame();
-          cancelSessionDrawerDragFrame();
-          sessionDrawerTranslateX.stopAnimation();
-          mainSceneTranslateX.stopAnimation();
-          setSessionsVisible(true);
-          sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
-          mainSceneTranslateX.setValue(0);
-        },
-        onPanResponderMove: (_, gestureState) => {
-          const nextX = Math.min(0, -sessionDrawerHiddenOffsetRef.current + Math.max(0, gestureState.dx));
-          setSessionDrawerPosition(nextX);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          drawerGestureOpeningRef.current = false;
-          if (gestureState.dx > windowWidth * 0.14 || gestureState.vx > 0.38) {
-            openSessionsDrawer(gestureState.vx);
-            return;
-          }
-          closeSessionsDrawer(true, gestureState.vx);
-        },
-        onPanResponderTerminate: () => {
-          drawerGestureOpeningRef.current = false;
-          closeSessionsDrawer(true);
-        },
-        onPanResponderTerminationRequest: () => false,
-      });
-    },
-    [
-      chatMenuVisible,
-      horizontalGestureLocked,
-      modelPickerVisible,
-      sessionDrawerTranslateX,
-      sessionsVisible,
-      settingsVisible,
-      windowWidth,
-    ]
-  );
   const chatSceneTranslateX = mainSceneTranslateX;
+  const drawerSceneAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: drawerSceneTranslateX.value }],
+  }));
   const settingsContentTranslateX = settingsContentProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [settingsContentMotion === 'rootEnter' ? -28 : 34, 0],
@@ -657,7 +580,8 @@ export default function App() {
     sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
     sessionDrawerDragTargetRef.current = -sessionDrawerHiddenOffsetRef.current;
     mainSceneTranslateX.setValue(0);
-  }, [mainSceneTranslateX, sessionDrawerTranslateX, sessionsVisible, windowWidth]);
+    drawerSceneTranslateX.value = 0;
+  }, [drawerSceneTranslateX, mainSceneTranslateX, sessionDrawerTranslateX, sessionsVisible, windowWidth]);
 
   function getMainSceneXForDrawer(drawerX: number) {
     const drawerWidth = sessionDrawerHiddenOffsetRef.current;
@@ -675,7 +599,9 @@ export default function App() {
       const drawerX = clampNumber(sessionDrawerDragTargetRef.current, -sessionDrawerHiddenOffsetRef.current, 0);
       sessionDrawerDragTargetRef.current = drawerX;
       sessionDrawerTranslateX.setValue(drawerX);
-      mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX));
+      const sceneX = getMainSceneXForDrawer(drawerX);
+      mainSceneTranslateX.setValue(sceneX);
+      drawerSceneTranslateX.value = sceneX;
     });
   }
 
@@ -729,7 +655,9 @@ export default function App() {
     const drawerX = open ? 0 : -sessionDrawerHiddenOffsetRef.current;
     sessionDrawerDragTargetRef.current = drawerX;
     sessionDrawerTranslateX.setValue(drawerX);
-    mainSceneTranslateX.setValue(getMainSceneXForDrawer(drawerX));
+    const sceneX = getMainSceneXForDrawer(drawerX);
+    mainSceneTranslateX.setValue(sceneX);
+    drawerSceneTranslateX.value = sceneX;
     setSessionsVisible(open);
     if (!open) {
       setSessionSelectionMode(false);
@@ -772,7 +700,9 @@ export default function App() {
     const nextX = clampNumber(sessionDrawerDragTargetRef.current, -sessionDrawerHiddenOffsetRef.current, 0);
     sessionDrawerDragTargetRef.current = nextX;
     sessionDrawerTranslateX.setValue(nextX);
-    mainSceneTranslateX.setValue(getMainSceneXForDrawer(nextX));
+    const sceneX = getMainSceneXForDrawer(nextX);
+    mainSceneTranslateX.setValue(sceneX);
+    drawerSceneTranslateX.value = sceneX;
     return nextX;
   }
 
@@ -794,6 +724,10 @@ export default function App() {
     sessionDrawerDragTargetRef.current = toValue;
     mainSceneTranslateX.stopAnimation();
     const toSceneValue = getMainSceneXForDrawer(toValue);
+    drawerSceneTranslateX.value = withTiming(toSceneValue, {
+      duration,
+      easing: REANIMATED_DRAWER_SETTLE_EASING,
+    });
     Animated.parallel([
       Animated.timing(sessionDrawerTranslateX, {
         toValue,
@@ -818,6 +752,155 @@ export default function App() {
     });
     return duration;
   }
+
+  function beginReanimatedDrawerOpenGesture() {
+    sessionDrawerAnimationIdRef.current += 1;
+    drawerGestureOpeningRef.current = true;
+    clearSessionDrawerFallbackTimer();
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
+    sessionDrawerTranslateX.stopAnimation();
+    mainSceneTranslateX.stopAnimation();
+    sessionDrawerDragTargetRef.current = -sessionDrawerHiddenOffsetRef.current;
+    sessionDrawerTranslateX.setValue(-sessionDrawerHiddenOffsetRef.current);
+    mainSceneTranslateX.setValue(0);
+  }
+
+  function cancelReanimatedDrawerOpenGesture() {
+    drawerGestureOpeningRef.current = false;
+    closeSessionsDrawer(true);
+  }
+
+  function beginReanimatedDrawerCloseGesture() {
+    sessionDrawerAnimationIdRef.current += 1;
+    sessionDrawerClosingRef.current = false;
+    drawerGestureOpeningRef.current = false;
+    clearSessionDrawerFallbackTimer();
+    cancelSessionDrawerSettleFrame();
+    cancelSessionDrawerDragFrame();
+    sessionDrawerTranslateX.stopAnimation();
+    mainSceneTranslateX.stopAnimation();
+    sessionDrawerDragTargetRef.current = 0;
+    sessionDrawerTranslateX.setValue(0);
+    mainSceneTranslateX.setValue(sessionDrawerHiddenOffsetRef.current);
+  }
+
+  function cancelReanimatedDrawerCloseGesture() {
+    openSessionsDrawer();
+  }
+
+  function syncDrawerSceneForReanimatedGesture(sceneX: number) {
+    const drawerWidth = sessionDrawerHiddenOffsetRef.current;
+    const syncedSceneX = clampNumber(sceneX, 0, drawerWidth);
+    const drawerX = syncedSceneX - drawerWidth;
+    sessionDrawerDragTargetRef.current = drawerX;
+    sessionDrawerTranslateX.setValue(drawerX);
+    mainSceneTranslateX.setValue(syncedSceneX);
+    drawerSceneTranslateX.value = syncedSceneX;
+  }
+
+  function finishReanimatedDrawerOpenGesture(sceneX: number, shouldOpen: boolean, velocityX: number) {
+    syncDrawerSceneForReanimatedGesture(sceneX);
+    if (shouldOpen) {
+      openSessionsDrawer(velocityX / 1000);
+      return;
+    }
+    closeSessionsDrawer(true, velocityX / 1000);
+  }
+
+  function finishReanimatedDrawerCloseGesture(sceneX: number, shouldClose: boolean, velocityX: number) {
+    syncDrawerSceneForReanimatedGesture(sceneX);
+    if (shouldClose) {
+      closeSessionsDrawer(true, velocityX / 1000);
+      return;
+    }
+    openSessionsDrawer(velocityX / 1000);
+  }
+
+  const drawerOpenGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!sessionsVisible && !settingsVisible && !modelPickerVisible && !chatMenuVisible && !horizontalGestureLocked)
+        .hitSlop({ left: 0, width: windowWidth * DRAWER_OPEN_EDGE_FRACTION })
+        .activeOffsetX(DRAWER_OPEN_SWIPE_MIN_DISTANCE)
+        .failOffsetY([
+          -DRAWER_OPEN_SWIPE_MIN_DISTANCE * DRAWER_OPEN_SWIPE_SLOPE,
+          DRAWER_OPEN_SWIPE_MIN_DISTANCE * DRAWER_OPEN_SWIPE_SLOPE,
+        ])
+        .onStart(() => {
+          drawerSceneTranslateX.value = 0;
+          runOnJS(beginReanimatedDrawerOpenGesture)();
+        })
+        .onUpdate((event) => {
+          const drawerWidth = drawerWidthShared.value;
+          drawerSceneTranslateX.value = Math.max(0, Math.min(event.translationX, drawerWidth));
+        })
+        .onEnd((event) => {
+          const drawerWidth = drawerWidthShared.value;
+          const currentWindowWidth = windowWidthShared.value;
+          const sceneX = Math.max(0, Math.min(event.translationX, drawerWidth));
+          const shouldOpen =
+            event.translationX > currentWindowWidth * 0.14 ||
+            event.velocityX > DRAWER_OPEN_SWIPE_FAST_VELOCITY * 1000;
+          runOnJS(finishReanimatedDrawerOpenGesture)(sceneX, shouldOpen, event.velocityX);
+        })
+        .onFinalize((_, success) => {
+          if (!success) {
+            drawerSceneTranslateX.value = withTiming(0, {
+              duration: DRAWER_SETTLE_MIN_DURATION_MS,
+              easing: REANIMATED_DRAWER_SETTLE_EASING,
+            });
+            runOnJS(cancelReanimatedDrawerOpenGesture)();
+          }
+        }),
+    [
+      chatMenuVisible,
+      drawerSceneTranslateX,
+      horizontalGestureLocked,
+      modelPickerVisible,
+      sessionsVisible,
+      settingsVisible,
+      windowWidth,
+      windowWidthShared,
+      drawerWidthShared,
+    ]
+  );
+
+  const drawerCloseGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(sessionsVisible)
+        .activeOffsetX(-SESSION_CLOSE_SWIPE_MIN_DISTANCE)
+        .failOffsetY([
+          -SESSION_CLOSE_SWIPE_MIN_DISTANCE / Math.max(0.1, SESSION_CLOSE_SWIPE_SLOPE),
+          SESSION_CLOSE_SWIPE_MIN_DISTANCE / Math.max(0.1, SESSION_CLOSE_SWIPE_SLOPE),
+        ])
+        .onStart(() => {
+          drawerSceneTranslateX.value = drawerWidthShared.value;
+          runOnJS(beginReanimatedDrawerCloseGesture)();
+        })
+        .onUpdate((event) => {
+          const drawerWidth = drawerWidthShared.value;
+          drawerSceneTranslateX.value = Math.max(0, Math.min(drawerWidth + event.translationX, drawerWidth));
+        })
+        .onEnd((event) => {
+          const drawerWidth = drawerWidthShared.value;
+          const currentWindowWidth = windowWidthShared.value;
+          const sceneX = Math.max(0, Math.min(drawerWidth + event.translationX, drawerWidth));
+          const shouldClose = event.translationX < -currentWindowWidth * 0.16 || event.velocityX < -280;
+          runOnJS(finishReanimatedDrawerCloseGesture)(sceneX, shouldClose, event.velocityX);
+        })
+        .onFinalize((_, success) => {
+          if (!success) {
+            drawerSceneTranslateX.value = withTiming(drawerWidthShared.value, {
+              duration: DRAWER_SETTLE_MIN_DURATION_MS,
+              easing: REANIMATED_DRAWER_SETTLE_EASING,
+            });
+            runOnJS(cancelReanimatedDrawerCloseGesture)();
+          }
+        }),
+    [drawerSceneTranslateX, sessionsVisible, windowWidthShared, drawerWidthShared]
+  );
 
   useEffect(() => {
     if (!settingsVisible) {
@@ -3023,7 +3106,6 @@ export default function App() {
     return (
       <View
         style={[styles.drawerBackdrop, { width: sessionDrawerWidth }]}
-        {...sessionDrawerPanResponder.panHandlers}
       >
         <SafeAreaView
           style={[styles.sessionDrawer, { backgroundColor: theme.surface }]}
@@ -3134,7 +3216,6 @@ export default function App() {
           )}
 
           <FlatList
-            {...sessionDrawerPanResponder.panHandlers}
             style={styles.drawerHistoryScroll}
             contentContainerStyle={styles.drawerHistoryContent}
             data={visibleConversations}
@@ -3152,7 +3233,6 @@ export default function App() {
               <View
                 collapsable={false}
                 style={[styles.drawerHistoryFooterSwipeArea, { minHeight: drawerBlankSwipeFooterHeight }]}
-                {...sessionDrawerPanResponder.panHandlers}
               />
             }
             ListEmptyComponent={
@@ -3183,19 +3263,18 @@ export default function App() {
   return (
     <LinearGradient colors={theme.gradient} style={styles.root}>
         <StatusBar barStyle={theme.statusBar} />
-      <Animated.View
+      <GestureDetector gesture={drawerCloseGesture}>
+      <Reanimated.View
         style={[
           styles.drawerSceneCanvas,
           {
             left: -sessionDrawerWidth,
             width: windowWidth + sessionDrawerWidth,
-            transform: [{ translateX: chatSceneTranslateX }],
           },
+          drawerSceneAnimatedStyle,
         ]}
       >
-        {sessionsVisible ? renderSessionDrawerPanel() : (
-          <View pointerEvents="none" style={[styles.drawerSpacer, { width: sessionDrawerWidth }]} />
-        )}
+        {renderSessionDrawerPanel()}
       <View style={[styles.mainScene, { width: windowWidth }]}>
         <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -3264,7 +3343,8 @@ export default function App() {
 
           <DrawerGestureContext.Provider value={drawerGestureContextValue}>
           <View style={styles.chatShell}>
-            <View style={styles.chatScrollWrap} {...chatOpenDrawerPanResponder.panHandlers}>
+            <GestureDetector gesture={drawerOpenGesture}>
+            <View style={styles.chatScrollWrap}>
               {!settingsVisible && !modelPickerVisible && !chatMenuVisible && (
                 <View
                   pointerEvents="none"
@@ -3311,6 +3391,7 @@ export default function App() {
 
               </ScrollView>
             </View>
+            </GestureDetector>
 
             <Animated.View
               ref={composerDockRef}
@@ -3425,11 +3506,11 @@ export default function App() {
             <Pressable
               style={styles.drawerUnderlayPressable}
               onPress={() => closeSessionsDrawer()}
-              {...sessionDrawerPanResponder.panHandlers}
             />
           </View>
         )}
-      </Animated.View>
+      </Reanimated.View>
+      </GestureDetector>
 
       <Modal visible={settingsVisible} animationType="none" transparent statusBarTranslucent onRequestClose={goBackFromSettings}>
         <View style={[styles.settingsModalRoot, { backgroundColor: theme.surface }]}>
