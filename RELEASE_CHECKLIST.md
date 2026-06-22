@@ -11,6 +11,15 @@
 
 ## 发布前验证
 
+## Codex 辅助检查
+
+- 涉及 API Key、聊天导出、附件缓存、签名文件、上传目录、Release 边界时，先让 Codex 使用 `security-best-practices` 做只读审查。
+- 涉及拆分 `App.tsx`、长期架构计划、provider capabilities、上下文管理时，先让 Codex 使用 `define-goal` 拆成小目标。
+- 接入 GitHub Actions 或排查 CI 失败时，让 Codex 使用 `gh-fix-ci`。
+- 这些 skill 只作为流程辅助，不替代版本号递增、真机测试、APK SHA256、选择性同步和手动发布规则。
+
+## 自动检查
+
 ```powershell
 cd E:\android\projects\ai-chat-pocket
 cmd /c node_modules\.bin\tsc.cmd --noEmit

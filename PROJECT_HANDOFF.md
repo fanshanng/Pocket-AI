@@ -180,6 +180,27 @@ System prompt: You are a careful coding assistant. Prefer practical, tested answ
 
 Project ID and Organization are OpenAI account/project routing headers and should usually stay empty for DeepSeek. System prompt is sent as a long-lived instruction with local conversation context.
 
+## Codex Skills Workflow
+
+Installed local skills that should be considered part of the normal development flow after Codex restart:
+
+- `security-best-practices`
+  - Use before security-sensitive work, release-boundary changes, storage/export changes, API key handling, attachment cache changes, signing/upload changes, or public release preparation.
+  - Prefer a read-only review first, then make fixes in separate patch versions.
+- `define-goal`
+  - Use for multi-step framework work, `App.tsx` extraction, provider capability planning, context management, and other long-running architecture work.
+  - Keep the goal scoped to one low-coupling direction and do not mix gesture, Markdown, storage, and UI refactors in one patch.
+- `gh-fix-ci`
+  - Use after GitHub Actions is added, or when a CI failure log needs diagnosis.
+  - Do not add or rewrite CI broadly unless the current task is explicitly about CI.
+
+Workflow reminder:
+
+- If the user asks for security review, privacy review, release safety, signing/upload boundaries, API key/export behavior, or attachment storage, proactively use `security-best-practices`.
+- If the user asks to plan a large refactor or continue the long-term framework plan, proactively use `define-goal`.
+- If the user asks about CI, GitHub Actions, or failing checks, proactively use `gh-fix-ci`.
+- These skills support the process; they do not replace the project rules for version bumps, standalone APK verification, selective Git sync, and no push/tag unless explicitly requested.
+
 ## Next Optimization Queue
 
 Recommended next tasks:
