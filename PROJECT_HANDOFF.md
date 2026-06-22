@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.10` / Android `versionCode 73`.
+- Current version: `1.3.11` / Android `versionCode 74`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 
 ## Recently Implemented
@@ -89,6 +89,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.3.8 fixes the closed-state drawer opener so right swipes from the middle or right side of the screen no longer open the drawer; the opener now uses a capped left-edge width and a recorded touch-start X check.
 - v1.3.9 restores a quicker older-style left drawer open threshold while preserving the v1.3.8 capped edge-start guard, and clarifies the About page contribution boundaries.
 - v1.3.10 adds an isolated Drawer Lab under Settings > About to test the built-in RNGH DrawerLayout feel without replacing the production chat drawer.
+- v1.3.11 expands the Drawer Lab with visible edge-zone markers, progress telemetry, and distinct front/back/slide motion labels so the swipe experiments are easier to tell apart.
 
 ## Key Files
 
@@ -259,7 +260,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.10 APK SHA-256:
+Current v1.3.11 APK SHA-256:
+
+```text
+D104C8B125A77E086A273F70C755555BB51B58413D7A1658F8236DCFAF00C74A
+```
+
+Previous v1.3.10 APK SHA-256:
 
 ```text
 C78C84271C61664982B6B9BD5CC93B3821CED3D642D8F632C058EDA161F608B7
