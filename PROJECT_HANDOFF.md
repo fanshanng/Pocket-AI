@@ -14,7 +14,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current UI theme: white/light mobile AI chat
 - Standalone APK workflow is preferred. Do not assume Metro or same-LAN development is needed for normal testing.
 - Current public release target: GitHub Release APK, not Google Play.
-- Current version: `1.3.12` / Android `versionCode 75`.
+- Current version: `1.3.13` / Android `versionCode 76`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
 - Local terminal defaults are now configured to read UTF-8 cleanly; repeated shell-output encoding workarounds should not be reintroduced unless a command still proves otherwise.
 
@@ -92,6 +92,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - v1.3.10 adds an isolated Drawer Lab under Settings > About to test the built-in RNGH DrawerLayout feel without replacing the production chat drawer.
 - v1.3.11 expands the Drawer Lab with visible edge-zone markers, progress telemetry, and distinct front/back/slide motion labels so the swipe experiments are easier to tell apart.
 - v1.3.12 adds a Drawer Lab engine switch between legacy DrawerLayout and ReanimatedDrawerLayout, and records the minimal Reanimated Babel/dependency setup needed to keep that experiment reproducible.
+- v1.3.13 fixes the Drawer Lab modal so RNGH drawer gestures can run inside the lab again, renders the formula example through the real Markdown/KaTeX pipeline, and adds a stronger Android keyboard-lift fallback for the main chat composer.
 
 ## Key Files
 
@@ -264,7 +265,13 @@ Expected signing certificate SHA-256:
 9818729430986a531f0ac5e68b526dc019bc68a8320273306b6635436e939db1
 ```
 
-Current v1.3.12 APK SHA-256:
+Current v1.3.13 APK SHA-256:
+
+```text
+7158B4B9DE307E934BCA78047942DFC155049C7DC37AB9AF5B327C5E4AC71B75
+```
+
+Previous v1.3.12 APK SHA-256:
 
 ```text
 7E643205982B878CF745720D5C43B931435BAB19DAF60FA147F74EA9BDB57505

@@ -16,7 +16,7 @@ This document keeps the long-term architecture direction visible without mixing 
 
 `v1.2.1` remains the rollback baseline for drawer gestures, composer tap targets, dark attachment menu styling, table/formula/code horizontal scrolling, settings return behavior, and long-press haptic feedback.
 
-Current version: `v1.3.12`.
+Current version: `v1.3.13`.
 
 ## Refactor Rules
 
@@ -131,4 +131,5 @@ Prefer explicit import/export boundaries:
 - `v1.3.10`: Add an isolated Drawer Lab for testing built-in RNGH DrawerLayout behavior before replacing the production chat drawer.
 - `v1.3.11`: Make the Drawer Lab easier to compare by adding visible edge-zone markers, drawer progress telemetry, and clearer front/back/slide motion labels.
 - `v1.3.12`: Add a Drawer Lab engine switch between legacy DrawerLayout and ReanimatedDrawerLayout, while keeping the experiment isolated from the production drawer.
+- `v1.3.13`: Fix the Drawer Lab modal gesture root, render its formula sample through the real Markdown/KaTeX path, and restore a stronger Android keyboard-lift fallback for the main chat composer.
 - `v1.3.x`: Add network search profile settings behind provider capability checks.

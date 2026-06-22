@@ -10,10 +10,12 @@ import ReanimatedDrawerLayout, {
   DrawerState as ReanimatedDrawerState,
   DrawerType as ReanimatedDrawerType,
 } from 'react-native-gesture-handler/ReanimatedDrawerLayout';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Menu, X } from 'lucide-react-native';
 
 import type { AppTheme } from '../theme';
 import type { UiLanguage } from '../types';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 type DrawerEdgeMode = 'edge' | 'full';
 type DrawerEngine = 'legacy' | 'reanimated';
@@ -301,9 +303,9 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
 
         <View style={[styles.panel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
           <Text style={[styles.panelTitle, { color: theme.text }]}>{copy.formulaTitle}</Text>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-            <Text style={[styles.monoLine, { color: theme.subtle }]}>{LONG_FORMULA}</Text>
-          </ScrollView>
+          <View style={styles.mathPreview}>
+            <MarkdownRenderer text={`$$\n${LONG_FORMULA}\n$$`} colorScheme={theme.scheme} />
+          </View>
         </View>
 
         <View style={[styles.panel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
@@ -325,51 +327,53 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.root, { backgroundColor: theme.surface }]}>
-        {drawerEngine === 'legacy' ? (
-          <LegacyDrawerLayout
-            key={drawerKey}
-            ref={setDrawerInstance}
-            drawerPosition="left"
-            drawerType={LEGACY_DRAWER_TYPES[drawerType]}
-            drawerWidth={drawerWidth}
-            edgeWidth={edgeWidth}
-            minSwipeDistance={8}
-            overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
-            drawerBackgroundColor={theme.surface}
-            keyboardDismissMode="none"
-            useNativeAnimations
-            onDrawerStateChanged={handleLegacyStateChange}
-            onDrawerSlide={handleDrawerSlide}
-            onDrawerOpen={() => setDrawerProgress(1)}
-            onDrawerClose={() => setDrawerProgress(0)}
-            renderNavigationView={renderNavigationView}
-          >
-            {renderLabContent()}
-          </LegacyDrawerLayout>
-        ) : (
-          <ReanimatedDrawerLayout
-            key={drawerKey}
-            ref={setDrawerInstance}
-            drawerPosition={ReanimatedDrawerPosition.LEFT}
-            drawerType={REANIMATED_DRAWER_TYPES[drawerType]}
-            drawerWidth={drawerWidth}
-            edgeWidth={edgeWidth}
-            minSwipeDistance={8}
-            overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
-            drawerBackgroundColor={theme.surface}
-            keyboardDismissMode={ReanimatedDrawerKeyboardDismissMode.NONE}
-            animationSpeed={16}
-            onDrawerStateChanged={handleReanimatedStateChange}
-            onDrawerSlide={handleDrawerSlide}
-            onDrawerOpen={() => setDrawerProgress(1)}
-            onDrawerClose={() => setDrawerProgress(0)}
-            renderNavigationView={renderNavigationView}
-          >
-            {renderLabContent()}
-          </ReanimatedDrawerLayout>
-        )}
-      </SafeAreaView>
+      <GestureHandlerRootView style={[styles.root, { backgroundColor: theme.surface }]}>
+        <SafeAreaView style={styles.root}>
+          {drawerEngine === 'legacy' ? (
+            <LegacyDrawerLayout
+              key={drawerKey}
+              ref={setDrawerInstance}
+              drawerPosition="left"
+              drawerType={LEGACY_DRAWER_TYPES[drawerType]}
+              drawerWidth={drawerWidth}
+              edgeWidth={edgeWidth}
+              minSwipeDistance={8}
+              overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
+              drawerBackgroundColor={theme.surface}
+              keyboardDismissMode="none"
+              useNativeAnimations
+              onDrawerStateChanged={handleLegacyStateChange}
+              onDrawerSlide={handleDrawerSlide}
+              onDrawerOpen={() => setDrawerProgress(1)}
+              onDrawerClose={() => setDrawerProgress(0)}
+              renderNavigationView={renderNavigationView}
+            >
+              {renderLabContent()}
+            </LegacyDrawerLayout>
+          ) : (
+            <ReanimatedDrawerLayout
+              key={drawerKey}
+              ref={setDrawerInstance}
+              drawerPosition={ReanimatedDrawerPosition.LEFT}
+              drawerType={REANIMATED_DRAWER_TYPES[drawerType]}
+              drawerWidth={drawerWidth}
+              edgeWidth={edgeWidth}
+              minSwipeDistance={8}
+              overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
+              drawerBackgroundColor={theme.surface}
+              keyboardDismissMode={ReanimatedDrawerKeyboardDismissMode.NONE}
+              animationSpeed={16}
+              onDrawerStateChanged={handleReanimatedStateChange}
+              onDrawerSlide={handleDrawerSlide}
+              onDrawerOpen={() => setDrawerProgress(1)}
+              onDrawerClose={() => setDrawerProgress(0)}
+              renderNavigationView={renderNavigationView}
+            >
+              {renderLabContent()}
+            </ReanimatedDrawerLayout>
+          )}
+        </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -697,6 +701,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     fontWeight: '700',
+  },
+  mathPreview: {
+    minHeight: 42,
   },
   monoBlock: {
     minWidth: 920,

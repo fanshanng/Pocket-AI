@@ -880,14 +880,23 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (hasKeyboardInsetsBridge()) {
-      return undefined;
-    }
-
+    // Keep a JS-side fallback even when the native inset bridge exists, because
+    // some Android keyboard transitions arrive late or miss their first inset event.
     const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSubscription = Keyboard.addListener(keyboardShowEvent, () => {
+    const showSubscription = Keyboard.addListener(keyboardShowEvent, (event) => {
       keyboardVisibleRef.current = true;
+      const endCoordinates = event?.endCoordinates;
+      if (endCoordinates) {
+        const nextBottom = Math.max(0, Math.round(endCoordinates.height ?? 0));
+        const nextScreenY = Math.max(0, Math.round(endCoordinates.screenY ?? 0));
+        if (nextBottom > 0) {
+          keyboardInsetBottomRef.current = nextBottom;
+        }
+        if (nextScreenY > 0) {
+          keyboardTopRef.current = nextScreenY;
+        }
+      }
       if (composerKeyboardResetTimerRef.current) {
         clearTimeout(composerKeyboardResetTimerRef.current);
         composerKeyboardResetTimerRef.current = null;
@@ -1195,27 +1204,22 @@ export default function App() {
   }
 
   function getKeyboardTop() {
-    if (Platform.OS === 'android') {
-      if (keyboardTopRef.current !== null) {
-        return Math.max(0, Math.min(windowHeight, keyboardTopRef.current));
-      }
-      if (keyboardInsetBottomRef.current > 0) {
-        return Math.max(0, windowHeight - keyboardInsetBottomRef.current);
-      }
-      return windowHeight;
-    }
-
     const metrics = Keyboard.metrics();
-    if (!metrics || metrics.height <= 0) {
-      return windowHeight;
+    if (metrics && metrics.height > 0) {
+      const frameTop =
+        Number.isFinite(metrics.screenY) && metrics.screenY > 0 && metrics.screenY < windowHeight
+          ? metrics.screenY
+          : windowHeight - metrics.height;
+      return Math.max(0, Math.min(windowHeight, frameTop));
     }
 
-    const fallbackTop = windowHeight - metrics.height;
-    const frameTop =
-      Number.isFinite(metrics.screenY) && metrics.screenY > 0 && metrics.screenY < windowHeight
-        ? metrics.screenY
-        : fallbackTop;
-    return Math.max(0, Math.min(windowHeight, frameTop));
+    if (keyboardTopRef.current !== null) {
+      return Math.max(0, Math.min(windowHeight, keyboardTopRef.current));
+    }
+    if (keyboardInsetBottomRef.current > 0) {
+      return Math.max(0, windowHeight - keyboardInsetBottomRef.current);
+    }
+    return windowHeight;
   }
 
   function resetComposerAutoLift() {
@@ -3233,11 +3237,10 @@ export default function App() {
                     value={composerText}
                     onChangeText={setComposerText}
                     onFocus={() => {
+                      keyboardVisibleRef.current = true;
                       if (hasKeyboardInsetsBridge()) {
                         startKeyboardInsetsTracking();
-                        return;
                       }
-                      keyboardVisibleRef.current = true;
                       updateComposerAutoLift();
                     }}
                     onBlur={resetComposerAutoLift}
