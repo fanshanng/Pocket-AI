@@ -26,6 +26,8 @@ Current version: `v1.3.11`.
 - Add focused English comments near non-obvious boundaries, especially privacy, platform quirks, gesture arbitration, and export/import compatibility.
 - Keep behavior-preserving extractions guarded by `tsc`, `smoke`, and targeted manual testing.
 - If a new abstraction makes a stable interaction worse, stop and keep the previous stable version.
+- Low-risk workflow papercuts may be fixed along the way when they reduce repeated development friction or token waste, but keep them separate from risky runtime behavior changes whenever possible.
+- Terminal and tooling defaults that improve repeatability, such as stable UTF-8 shell output, should be preserved once fixed instead of being reworked ad hoc in later sessions.
 
 ## Target Layers
 

@@ -16,6 +16,7 @@ This file is for starting a fresh Codex conversation without losing project cont
 - Current public release target: GitHub Release APK, not Google Play.
 - Current version: `1.3.11` / Android `versionCode 74`.
 - Current release APK path: `E:\android\projects\ai-chat-pocket\android\app\build\outputs\apk\release\app-release.apk`.
+- Local terminal defaults are now configured to read UTF-8 cleanly; repeated shell-output encoding workarounds should not be reintroduced unless a command still proves otherwise.
 
 ## Recently Implemented
 
@@ -201,6 +202,8 @@ Workflow reminder:
 - If the user asks to plan a large refactor or continue the long-term framework plan, proactively use `define-goal`.
 - If the user asks about CI, GitHub Actions, or failing checks, proactively use `gh-fix-ci`.
 - These skills support the process; they do not replace the project rules for version bumps, standalone APK verification, selective Git sync, and no push/tag unless explicitly requested.
+- Small recurring development papercuts may be fixed opportunistically when they clearly reduce repeated context/token waste and do not widen product risk. Examples: terminal/tooling defaults, output readability, local audit reminders, and other low-risk workflow friction.
+- Opportunistic workflow fixes should stay small, be documented, and should not be mixed into high-risk gesture, Markdown, storage, or rendering changes unless they are tightly related.
 
 ## Next Optimization Queue
 
