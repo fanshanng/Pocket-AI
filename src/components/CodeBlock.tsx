@@ -473,6 +473,7 @@ function CodeBlockComponent({
     HIGHLIGHT_LANGUAGES.has(resolvedLanguage);
   const accentColor = LANGUAGE_ACCENTS[resolvedLanguage] ?? '#93C5FD';
   const contentWidth = useMemo(() => estimateCodeContentWidth(normalizedCode), [normalizedCode]);
+  const inlineContentWidth = Math.max(contentWidth, Math.max(40, codeBodyWidth));
   const fullscreenContentWidth = Math.max(contentWidth, Math.max(320, Math.floor(windowWidth - 24)));
 
   useEffect(() => {
@@ -523,13 +524,27 @@ function CodeBlockComponent({
         </View>
       </View>
       <View style={styles.codeBody} onLayout={handleCodeBodyLayout}>
-        <CodeContent
-          canHighlight={canHighlight}
-          code={normalizedCode}
-          language={resolvedLanguage}
-          width={codeBodyWidth || undefined}
-          wrap
-        />
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          directionalLockEnabled
+          showsHorizontalScrollIndicator
+          style={styles.codeScroll}
+          contentContainerStyle={[styles.codeScrollContent, { minWidth: inlineContentWidth }]}
+          onTouchEnd={onHorizontalGestureEnd}
+          onTouchCancel={onHorizontalGestureEnd}
+          onScrollBeginDrag={onHorizontalGestureStart}
+          onMomentumScrollEnd={onHorizontalGestureEnd}
+          onScrollEndDrag={onHorizontalGestureEnd}
+        >
+          <CodeContent
+            canHighlight={canHighlight}
+            code={normalizedCode}
+            language={resolvedLanguage}
+            width={inlineContentWidth}
+            wrap={false}
+          />
+        </ScrollView>
       </View>
       <Modal visible={fullscreenVisible} animationType="fade" onRequestClose={() => setFullscreenVisible(false)}>
         <SafeAreaView style={styles.fullscreenRoot}>
