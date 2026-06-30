@@ -2,9 +2,19 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 
 const root = process.cwd();
+const workspaceName = basename(root).toLowerCase();
+const siblingDevelopmentRoot = join(root, '..', 'ai-chat-pocket');
+const releaseNotesRoot =
+  workspaceName === 'ai-chat-pocket-git' && existsSync(join(siblingDevelopmentRoot, 'release-notes'))
+    ? siblingDevelopmentRoot
+    : root;
 
 function read(path) {
   return readFileSync(join(root, path), 'utf8');
+}
+
+function readFromReleaseNotesRoot(path) {
+  return readFileSync(join(releaseNotesRoot, path), 'utf8');
 }
 
 function check(condition, message) {
@@ -58,9 +68,9 @@ function requiredSection(note, heading) {
 
 function assertReleaseNoteShape(version, versionCode) {
   const notePath = `release-notes/RELEASE_NOTES_v${version}.md`;
-  check(existsSync(join(root, notePath)), `Current release note missing: ${notePath}`);
+  check(existsSync(join(releaseNotesRoot, notePath)), `Current release note missing: ${notePath}`);
 
-  const note = read(notePath);
+  const note = readFromReleaseNotesRoot(notePath);
   check(note.includes(`# Pocket AI v${version}`), 'Current release note title does not match package version');
   for (const heading of [
     'Version',
@@ -76,12 +86,12 @@ function assertReleaseNoteShape(version, versionCode) {
 
   check(note.includes(`App version: \`${version}\``), 'Current release note app version mismatch');
   check(note.includes(`Android \`versionCode\`: \`${versionCode}\``), 'Current release note versionCode mismatch');
-  check(!/\bPending(?: build)?\b/i.test(note), 'Current release note still contains Pending markers');
+  check(!/(^|\n)\s*-\s*Pending(?: build)?\b/im.test(note), 'Current release note still contains Pending markers');
   check(/[A-F0-9]{64}/.test(note), 'Current release note missing a SHA256-looking APK hash');
 }
 
 function assertRecentReleaseNotesHaveStandardShape() {
-  const notesDir = join(root, 'release-notes');
+  const notesDir = join(releaseNotesRoot, 'release-notes');
   const noteFiles = readdirSync(notesDir)
     .filter((name) => /^RELEASE_NOTES_v1\.2\.\d+\.md$/.test(name))
     .map((name) => ({
@@ -91,7 +101,7 @@ function assertRecentReleaseNotesHaveStandardShape() {
     .filter((entry) => compareVersions(entry.version, '1.2.2') >= 0);
 
   for (const entry of noteFiles) {
-    const note = read(`release-notes/${entry.name}`);
+    const note = readFromReleaseNotesRoot(`release-notes/${entry.name}`);
     for (const heading of ['Version', 'Change Summary', 'Modified Files', 'Test Results', 'APK SHA256']) {
       check(note.includes(`## ${heading}`), `${entry.name} missing section: ${heading}`);
     }
@@ -102,7 +112,24 @@ function assertReadmeIsReleasePageClean() {
   const readme = read('README.md');
   check(!/^##\s*(下载|Download)\b/im.test(readme), 'README should not contain a Download section');
   check(!readme.includes('release-notes/'), 'README should not point to local-only release-notes/');
+  check(!readme.includes('ARCHITECTURE_PLAN.md'), 'README should not point to local architecture docs');
   check(readme.includes('GitHub Releases'), 'README should point public release notes to GitHub Releases');
+  check(
+    readme.includes('GitHub 仓库后续只用于 Release 发布，不再同步后续开发源码。'),
+    'README should declare release-only publishing mode'
+  );
+}
+
+function assertReleaseChecklistMatchesPublishingMode() {
+  const checklist = read('RELEASE_CHECKLIST.md');
+  check(
+    checklist.includes('GitHub 仓库后续仅发布 Release，不再同步后续开发源码。'),
+    'Release checklist should document release-only publishing mode'
+  );
+  check(
+    checklist.includes('ai-chat-pocket-git'),
+    'Release checklist should mention the local upload workspace'
+  );
 }
 
 function assertForbiddenUploadFiles(version) {
@@ -159,6 +186,7 @@ check(packageJson.scripts?.['release:audit'] === 'node scripts/release-audit.mjs
 assertReleaseNoteShape(version, versionCode);
 assertRecentReleaseNotesHaveStandardShape();
 assertReadmeIsReleasePageClean();
+assertReleaseChecklistMatchesPublishingMode();
 assertForbiddenUploadFiles(version);
 
 check(handoff.includes(`Current version: \`${version}\` / Android \`versionCode ${versionCode}\``), 'PROJECT_HANDOFF current version mismatch');

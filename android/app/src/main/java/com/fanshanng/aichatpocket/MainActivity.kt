@@ -113,10 +113,10 @@ class MainActivity : ReactActivity() {
     val images = linkedMapOf<String, SharedImageItem>()
     when (intent.action) {
       Intent.ACTION_SEND -> {
-        intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { addImage(images, it) }
+        intent.readParcelableExtraCompat<Uri>(Intent.EXTRA_STREAM)?.let { addImage(images, it) }
       }
       Intent.ACTION_SEND_MULTIPLE -> {
-        intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.forEach { uri ->
+        intent.readParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM)?.forEach { uri ->
           addImage(images, uri)
         }
       }
@@ -163,6 +163,24 @@ class MainActivity : ReactActivity() {
       uri.lastPathSegment
     } finally {
       cursor?.close()
+    }
+  }
+
+  private inline fun <reified T : android.os.Parcelable> Intent.readParcelableExtraCompat(name: String): T? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      getParcelableExtra(name, T::class.java)
+    } else {
+      @Suppress("DEPRECATION")
+      getParcelableExtra(name)
+    }
+  }
+
+  private inline fun <reified T : android.os.Parcelable> Intent.readParcelableArrayListExtraCompat(name: String): ArrayList<T>? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      getParcelableArrayListExtra(name, T::class.java)
+    } else {
+      @Suppress("DEPRECATION")
+      getParcelableArrayListExtra(name)
     }
   }
 }

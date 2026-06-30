@@ -7,6 +7,14 @@ export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | '
 export type UiLanguage = 'zh' | 'en';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemePreset = 'classic' | 'graphite' | 'sunset' | 'forest' | 'rose';
+export type ChatBackgroundPreset = 'plain' | 'grid' | 'bands';
+export type DrawerOpenGestureMode = 'fullscreen' | 'edge';
+
+export type InteractionSettings = {
+  drawerOpenGestureMode: DrawerOpenGestureMode;
+  drawerEdgeWidthPx: number;
+};
 
 export type ApiProtocol = 'responses' | 'chatCompletions';
 
@@ -20,6 +28,7 @@ export type ApiProfile = {
   organization: string;
   systemPrompt: string;
   reasoningEffort: ReasoningEffort;
+  webSearchEnabled: boolean;
   cachedModels: string[];
   cachedReasoningEfforts: ReasoningEffort[];
   storeResponses: boolean;
@@ -67,6 +76,7 @@ export type ConversationRecord = {
   pinned: boolean;
   previousResponseId: string | null;
   messages: ChatMessage[];
+  lengthWarningAcknowledgedAt?: string | null;
 };
 
 export type PersistedState = {
@@ -77,6 +87,12 @@ export type PersistedState = {
   profile: ApiProfile;
   uiLanguage: UiLanguage;
   themeMode: ThemeMode;
+  themePreset: ThemePreset;
+  chatBackgroundPreset: ChatBackgroundPreset;
+  chatBackgroundImageUri: string | null;
+  chatBackgroundImageOpacity: number;
+  chatBubbleOpacity: number;
+  interactionSettings: InteractionSettings;
 };
 
 export type PendingAttachment = AttachmentRecord;

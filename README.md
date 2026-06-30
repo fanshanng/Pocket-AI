@@ -30,7 +30,9 @@ Base URL：https://api.openai.com/v1
 
 聊天记录、附件缓存和 API 配置保存在本机。API Key 使用系统安全存储保存，不会写入导出文件或上传到仓库。
 
-## 开发记录
+## 发布
 
-- 发布说明请查看 GitHub Releases 页面。
-- 当前架构梳理和后续拆分计划保存在 `docs/ARCHITECTURE_PLAN.md`。
+- GitHub 仓库后续只用于 Release 发布，不再同步后续开发源码。
+- 项目后续按闭源模式维护，GitHub 仅作为 APK Release 发布入口，不再默认公开同步源码更新。
+- 最新 APK、更新说明和 APK SHA256 以 GitHub Releases 页面为准。
+- 本地开发会继续独立迭代；如需同步私有源码快照，应先确认仓库可见性已切换为私有后再 push。

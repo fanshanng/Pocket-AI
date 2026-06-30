@@ -9,6 +9,7 @@ export function uniqueStrings(values: string[]): string[] {
 export function sanitizeProfile(profile: ApiProfile): ApiProfile {
   const model = profile.model.trim() || DEFAULT_PROFILE.model;
   const reasoningEffort = profile.reasoningEffort ?? DEFAULT_PROFILE.reasoningEffort;
+  const webSearchEnabled = profile.webSearchEnabled ?? DEFAULT_PROFILE.webSearchEnabled;
   return {
     ...DEFAULT_PROFILE,
     ...profile,
@@ -21,6 +22,7 @@ export function sanitizeProfile(profile: ApiProfile): ApiProfile {
     organization: profile.organization.trim(),
     systemPrompt: profile.systemPrompt.trim(),
     reasoningEffort,
+    webSearchEnabled,
     cachedModels: uniqueStrings([model, ...(profile.cachedModels ?? [])]),
     cachedReasoningEfforts: uniqueStrings([reasoningEffort, ...(profile.cachedReasoningEfforts ?? [])]) as ReasoningEffort[],
   };
@@ -46,6 +48,7 @@ export function applyApiPreset(profile: ApiProfile, preset: (typeof API_PRESETS)
     model: preset.model,
     storeResponses: preset.storeResponses,
     reasoningEffort: preset.reasoningEffort,
+    webSearchEnabled: preset.apiProtocol === 'responses',
     cachedModels: [preset.model],
     cachedReasoningEfforts: [preset.reasoningEffort],
     projectId: preset.id === 'deepseek' ? '' : profile.projectId,
@@ -83,6 +86,7 @@ export function getCachedReasoningEffortsForProfile(profile: ApiProfile): Reason
 
 export function profileHasAdvancedValues(profile: ApiProfile): boolean {
   return (
+    profile.webSearchEnabled !== DEFAULT_PROFILE.webSearchEnabled ||
     profile.projectId.trim().length > 0 ||
     profile.organization.trim().length > 0 ||
     profile.systemPrompt.trim().length > 0 ||

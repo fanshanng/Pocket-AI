@@ -7,6 +7,7 @@ import {
   readAttachmentAsDataUrl,
 } from './files';
 import { modelSupportsReasoning } from './models';
+import { inferProviderCapabilities } from './providerCapabilities';
 
 type ResponsesInputItem = {
   role: 'user' | 'assistant' | 'system';
@@ -111,6 +112,50 @@ function buildReasoning(profile: ApiProfile): { effort: ApiProfile['reasoningEff
   return { effort: profile.reasoningEffort };
 }
 
+function buildResponsesTools(profile: ApiProfile): Array<{ type: 'web_search' }> | undefined {
+  if (!profile.webSearchEnabled || !inferProviderCapabilities(profile).supportsWebSearch) {
+    return undefined;
+  }
+
+  // Use the stable Responses API tool name from the official OpenAI docs.
+  return [{ type: 'web_search' }];
+}
+
+function formatLocalRuntimeTimestamp(): string {
+  const now = new Date();
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  const timezoneOffsetMinutes = -now.getTimezoneOffset();
+  const sign = timezoneOffsetMinutes >= 0 ? '+' : '-';
+  const absoluteMinutes = Math.abs(timezoneOffsetMinutes);
+  const offsetHours = Math.floor(absoluteMinutes / 60);
+  const offsetMinutes = absoluteMinutes % 60;
+
+  return [
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+    `UTC${sign}${pad(offsetHours)}:${pad(offsetMinutes)}`,
+  ].join(' ');
+}
+
+function buildRuntimeSystemPrompt(profile: ApiProfile): string {
+  const sections: string[] = [];
+  if (profile.systemPrompt.trim()) {
+    sections.push(profile.systemPrompt.trim());
+  }
+
+  sections.push(
+    `Current local device date/time: ${formatLocalRuntimeTimestamp()}. Treat this as the user's current local time reference.`
+  );
+
+  if (buildResponsesTools(profile)) {
+    sections.push(
+      'For time-sensitive or current questions, including today\'s date, current time, recent events, breaking news, live facts, or "latest" requests, use web search before answering when it improves accuracy. When answering relative-date questions, anchor the answer with a concrete date.'
+    );
+  }
+
+  return sections.join('\n\n').trim();
+}
+
 function isDeepSeekChatModel(model: string): boolean {
   const normalized = model.trim().toLowerCase();
   return normalized.startsWith('deepseek-v4') || normalized === 'deepseek-reasoner' || normalized === 'deepseek-chat';
@@ -136,6 +181,11 @@ function buildResponsesRequestBody(
   const reasoning = buildReasoning(profile);
   if (reasoning) {
     body.reasoning = reasoning;
+  }
+
+  const tools = buildResponsesTools(profile);
+  if (tools) {
+    body.tools = tools;
   }
 
   return body;
@@ -266,6 +316,18 @@ async function buildFullChatCompletionMessages(
   }
   messages.push(await messageToChatCompletionMessage(nextUserMessage));
   return messages;
+}
+
+function buildResponsesTurnInput(systemPrompt: string, nextUserMessage: ResponsesInputItem): ResponsesInputItem[] {
+  const input: ResponsesInputItem[] = [];
+  if (systemPrompt.trim()) {
+    input.push({
+      role: 'system',
+      content: systemPrompt.trim(),
+    });
+  }
+  input.push(nextUserMessage);
+  return input;
 }
 
 function extractResponsesAssistantText(payload: any): string {
@@ -757,9 +819,10 @@ export async function createConversationTitle(options: {
 export async function createAssistantTurn(options: RequestOptions): Promise<ResponseTurn> {
   const { profile, apiKey, conversation, nextUserMessage, signal, onTextDelta } = options;
   const headers = buildHeaders(profile, apiKey);
+  const runtimeSystemPrompt = buildRuntimeSystemPrompt(profile);
 
   if (profile.apiProtocol === 'chatCompletions') {
-    const messages = await buildFullChatCompletionMessages(conversation, nextUserMessage, profile.systemPrompt);
+    const messages = await buildFullChatCompletionMessages(conversation, nextUserMessage, runtimeSystemPrompt);
     try {
       const streamed = await requestStream(
         `${normalizeBaseUrl(profile.baseUrl)}/chat/completions`,
@@ -773,7 +836,7 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
         onTextDelta
       );
 
-      const assistantText = streamed.text || extractResponsesAssistantText(streamed.finalPayload);
+      const assistantText = streamed.text || extractChatCompletionAssistantText(streamed.finalPayload);
       return {
         assistantText,
         responseId: streamed.id,
@@ -806,6 +869,7 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
   const url = `${normalizeBaseUrl(profile.baseUrl)}/responses`;
 
   const attemptWithChain = async (): Promise<ResponseTurn> => {
+    const nextInput = buildResponsesTurnInput(runtimeSystemPrompt, await messageToInput(nextUserMessage));
     try {
       const streamed = await requestStream(
         url,
@@ -814,7 +878,7 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
           headers,
           signal,
           body: JSON.stringify(
-            buildResponsesRequestBody(profile, [await messageToInput(nextUserMessage)], conversation.previousResponseId, true)
+            buildResponsesRequestBody(profile, nextInput, conversation.previousResponseId, true)
           ),
         },
         extractResponsesStreamDelta,
@@ -841,7 +905,7 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
       headers,
       signal,
       body: JSON.stringify(
-        buildResponsesRequestBody(profile, [await messageToInput(nextUserMessage)], conversation.previousResponseId)
+        buildResponsesRequestBody(profile, nextInput, conversation.previousResponseId)
       ),
     });
 
@@ -854,7 +918,7 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
   };
 
   const attemptFullContext = async (): Promise<ResponseTurn> => {
-    const fullInput = await buildFullInput(conversation, nextUserMessage, profile.systemPrompt);
+    const fullInput = await buildFullInput(conversation, nextUserMessage, runtimeSystemPrompt);
     try {
       const streamed = await requestStream(
         url,
@@ -868,10 +932,14 @@ export async function createAssistantTurn(options: RequestOptions): Promise<Resp
         onTextDelta
       );
 
+      const assistantText = streamed.text || extractResponsesAssistantText(streamed.finalPayload);
       return {
-        assistantText: streamed.text,
+        assistantText,
         responseId: streamed.id,
-        attachments: await collectAssistantAttachments(streamed.text),
+        attachments: await collectAssistantAttachments(
+          assistantText,
+          extractResponsesOutputAttachments(streamed.finalPayload)
+        ),
       };
     } catch (error) {
       if (signal?.aborted) {

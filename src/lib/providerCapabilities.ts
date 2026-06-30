@@ -51,12 +51,20 @@ export function inferProtocolCapabilities(protocol: ApiProtocol): ProviderCapabi
   };
 }
 
-export function inferProviderCapabilities(profile: Pick<ApiProfile, 'apiProtocol' | 'model'>): ProviderCapabilities {
+function supportsOpenAIWebSearch(profile: Pick<ApiProfile, 'apiProtocol' | 'baseUrl'>): boolean {
+  if (profile.apiProtocol !== 'responses') {
+    return false;
+  }
+
+  const normalizedBaseUrl = profile.baseUrl.trim().toLowerCase().replace(/\/+$/, '');
+  return normalizedBaseUrl === 'https://api.openai.com/v1' || normalizedBaseUrl === 'https://api.openai.com';
+}
+
+export function inferProviderCapabilities(profile: Pick<ApiProfile, 'apiProtocol' | 'model' | 'baseUrl'>): ProviderCapabilities {
   const capabilities = inferProtocolCapabilities(profile.apiProtocol);
   return {
     ...capabilities,
-    // Keep web search off until a later version adds explicit profile UI and request payload support.
-    supportsWebSearch: false,
+    supportsWebSearch: supportsOpenAIWebSearch(profile),
     supportsReasoning:
       profile.apiProtocol === 'chatCompletions'
         ? isDeepSeekReasoningModel(profile.model)

@@ -1,6 +1,35 @@
-import type { ApiProfile, AttachmentRecord, ChatMessage, ChatMessageVariant, ConversationRecord, UiLanguage } from '../types';
+import type {
+  ApiProfile,
+  AttachmentRecord,
+  ChatMessage,
+  ChatMessageVariant,
+  ConversationRecord,
+  UiLanguage,
+} from '../types';
 import { makeId } from './ids';
 import { classifyModel } from './models';
+
+export const CONVERSATION_LENGTH_WARNING_MESSAGE_COUNT = 120;
+export const CONVERSATION_LENGTH_BLOCK_MESSAGE_COUNT = 160;
+export const CONVERSATION_LENGTH_WARNING_BYTES = 320 * 1024;
+export const CONVERSATION_LENGTH_BLOCK_BYTES = 400 * 1024;
+export const CONVERSATION_LENGTH_ASSISTANT_RESERVE_BYTES = 24 * 1024;
+
+export type ConversationLengthGuardLevel = 'safe' | 'warning' | 'blocked';
+
+export type ConversationLengthGuard = {
+  level: ConversationLengthGuardLevel;
+  messageCount: number;
+  storageBytes: number;
+  remainingMessages: number;
+  remainingBytes: number;
+  warningMessageCount: number;
+  blockMessageCount: number;
+  warningBytes: number;
+  blockBytes: number;
+  hitMessageThreshold: boolean;
+  hitStorageThreshold: boolean;
+};
 
 export function createConversation(profile: ApiProfile, defaultTitle: string): ConversationRecord {
   const now = new Date().toISOString();
@@ -14,6 +43,7 @@ export function createConversation(profile: ApiProfile, defaultTitle: string): C
     pinned: false,
     previousResponseId: null,
     messages: [],
+    lengthWarningAcknowledgedAt: null,
   };
 }
 
@@ -21,6 +51,77 @@ export function trimTitle(value: string, defaultTitle: string): string {
   const compact = value.trim().replace(/\s+/g, ' ');
   if (!compact) return defaultTitle;
   return compact.length > 36 ? `${compact.slice(0, 36)}...` : compact;
+}
+
+export function estimateUtf8Bytes(value: string): number {
+  let total = 0;
+  for (const char of value) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint <= 0x7f) {
+      total += 1;
+    } else if (codePoint <= 0x7ff) {
+      total += 2;
+    } else if (codePoint <= 0xffff) {
+      total += 3;
+    } else {
+      total += 4;
+    }
+  }
+  return total;
+}
+
+export function estimateConversationStorageBytes(conversation: ConversationRecord): number {
+  return estimateUtf8Bytes(JSON.stringify(conversation));
+}
+
+export function estimateDraftTurnStorageBytes(
+  text: string,
+  attachments: AttachmentRecord[],
+  assistantReserveBytes = CONVERSATION_LENGTH_ASSISTANT_RESERVE_BYTES
+): number {
+  const draftEnvelope = {
+    role: 'user',
+    text,
+    attachments,
+  };
+  return estimateUtf8Bytes(JSON.stringify(draftEnvelope)) + assistantReserveBytes;
+}
+
+export function getConversationLengthGuard(
+  conversation: ConversationRecord,
+  options?: {
+    extraMessages?: number;
+    extraBytes?: number;
+  }
+): ConversationLengthGuard {
+  const messageCount = conversation.messages.length + Math.max(0, options?.extraMessages ?? 0);
+  const storageBytes = estimateConversationStorageBytes(conversation) + Math.max(0, options?.extraBytes ?? 0);
+  const hitBlockedMessageThreshold = messageCount >= CONVERSATION_LENGTH_BLOCK_MESSAGE_COUNT;
+  const hitBlockedStorageThreshold = storageBytes >= CONVERSATION_LENGTH_BLOCK_BYTES;
+  const hitWarningMessageThreshold = messageCount >= CONVERSATION_LENGTH_WARNING_MESSAGE_COUNT;
+  const hitWarningStorageThreshold = storageBytes >= CONVERSATION_LENGTH_WARNING_BYTES;
+  const level: ConversationLengthGuardLevel =
+    hitBlockedMessageThreshold || hitBlockedStorageThreshold
+      ? 'blocked'
+      : hitWarningMessageThreshold || hitWarningStorageThreshold
+        ? 'warning'
+        : 'safe';
+
+  return {
+    level,
+    messageCount,
+    storageBytes,
+    remainingMessages: Math.max(0, CONVERSATION_LENGTH_BLOCK_MESSAGE_COUNT - messageCount),
+    remainingBytes: Math.max(0, CONVERSATION_LENGTH_BLOCK_BYTES - storageBytes),
+    warningMessageCount: CONVERSATION_LENGTH_WARNING_MESSAGE_COUNT,
+    blockMessageCount: CONVERSATION_LENGTH_BLOCK_MESSAGE_COUNT,
+    warningBytes: CONVERSATION_LENGTH_WARNING_BYTES,
+    blockBytes: CONVERSATION_LENGTH_BLOCK_BYTES,
+    hitMessageThreshold:
+      level === 'blocked' ? hitBlockedMessageThreshold : hitWarningMessageThreshold,
+    hitStorageThreshold:
+      level === 'blocked' ? hitBlockedStorageThreshold : hitWarningStorageThreshold,
+  };
 }
 
 export function upsertConversation(

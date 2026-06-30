@@ -55,12 +55,12 @@ export function DirectionIcon({
   return <ChevronUp size={18} color={color} strokeWidth={2.5} style={direction === 'down' ? rotateDownStyle : undefined} />;
 }
 
-export function SendIcon({ light = true }: { light?: boolean }) {
-  return <Send size={16} color={light ? '#FFFFFF' : '#2563EB'} strokeWidth={2.4} />;
+export function SendIcon({ light = true, color }: { light?: boolean; color?: string }) {
+  return <Send size={16} color={color ?? (light ? '#FFFFFF' : '#2563EB')} strokeWidth={2.4} />;
 }
 
-export function StopIcon() {
-  return <Square size={13} color="#FFFFFF" fill="#FFFFFF" strokeWidth={2.2} />;
+export function StopIcon({ color = '#FFFFFF' }: { color?: string }) {
+  return <Square size={13} color={color} fill={color} strokeWidth={2.2} />;
 }
 
 export function CheckIcon() {

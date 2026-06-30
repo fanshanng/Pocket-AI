@@ -1,10 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import {
+  Alert,
   Animated,
   Easing,
   Image,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,36 +21,140 @@ import { LongPressGestureHandler, State, type LongPressGestureHandlerStateChange
 
 import { applyContentPlugins } from '../plugins';
 import type { AttachmentRecord, ChatMessage, UiLanguage } from '../types';
+import { openPrivateFile } from '../lib/files';
 import { triggerLongPressHaptic } from '../lib/haptics';
+import { withColorAlpha, type AppTheme } from '../theme';
 import { useDrawerGesture } from './DrawerGestureContext';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 type Props = {
   message: ChatMessage;
   language: UiLanguage;
-  colorScheme?: 'light' | 'dark';
+  theme: AppTheme;
+  bubbleOpacity?: number;
   isStreaming?: boolean;
   onRegenerate?: (messageId: string) => void;
   onEditUserMessage?: (messageId: string, nextText: string) => void;
   onSwitchVariant?: (messageId: string, direction: -1 | 1) => void;
+  onOpenAttachment?: (attachment: AttachmentRecord) => void;
 };
 
 const MESSAGE_LONG_PRESS_DELAY_MS = 320;
+const IMAGE_PREVIEW_DEFAULT_SIZE = { width: 172, height: 128 };
+const IMAGE_PREVIEW_MAX_WIDTH = 248;
+const IMAGE_PREVIEW_MAX_HEIGHT = 320;
 
-function AttachmentPreview({ attachment, language }: { attachment: AttachmentRecord; language: UiLanguage }) {
+function getBoundedImageSize(
+  imageWidth: number,
+  imageHeight: number,
+  maxWidth: number,
+  maxHeight: number
+) {
+  const safeWidth = Math.max(1, imageWidth);
+  const safeHeight = Math.max(1, imageHeight);
+  const containScale = Math.min(maxWidth / safeWidth, maxHeight / safeHeight, 1);
+
+  return {
+    width: Math.max(96, Math.round(safeWidth * containScale)),
+    height: Math.max(96, Math.round(safeHeight * containScale)),
+  };
+}
+
+function AttachmentPreview({
+  attachment,
+  language,
+  theme,
+  onOpenAttachmentFailed,
+  onOpenAttachment,
+}: {
+  attachment: AttachmentRecord;
+  language: UiLanguage;
+  theme: AppTheme;
+  onOpenAttachmentFailed: () => void;
+  onOpenAttachment?: (attachment: AttachmentRecord) => void;
+}) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [resolvedImageSize, setResolvedImageSize] = useState(IMAGE_PREVIEW_DEFAULT_SIZE);
+
+  useEffect(() => {
+    if (attachment.kind !== 'image') {
+      return;
+    }
+
+    let cancelled = false;
+    Image.getSize(
+      attachment.uri,
+      (width, height) => {
+        if (!cancelled && width > 0 && height > 0) {
+          setResolvedImageSize({
+            width,
+            height,
+          });
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setResolvedImageSize(IMAGE_PREVIEW_DEFAULT_SIZE);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment]);
+
+  const imageCardSize = useMemo(
+    () =>
+      getBoundedImageSize(
+        resolvedImageSize.width,
+        resolvedImageSize.height,
+        Math.min(IMAGE_PREVIEW_MAX_WIDTH, Math.round(windowWidth * 0.62)),
+        Math.min(IMAGE_PREVIEW_MAX_HEIGHT, Math.round(windowHeight * 0.42))
+      ),
+    [resolvedImageSize.height, resolvedImageSize.width, windowHeight, windowWidth]
+  );
+
+  function handleOpenAttachment() {
+    if (onOpenAttachment) {
+      onOpenAttachment(attachment);
+      return;
+    }
+
+    void openPrivateFile(attachment.uri).then((opened) => {
+      if (!opened) {
+        onOpenAttachmentFailed();
+      }
+    });
+  }
+
   if (attachment.kind === 'image') {
-    return <Image source={{ uri: attachment.uri }} style={styles.image} />;
+    return (
+      <Pressable
+        onPress={handleOpenAttachment}
+        style={[
+          styles.imageCard,
+          {
+            borderColor: theme.border,
+            backgroundColor: theme.surfaceAlt,
+            width: imageCardSize.width,
+            height: imageCardSize.height,
+          },
+        ]}
+      >
+        <Image
+          source={{ uri: attachment.uri }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      </Pressable>
+    );
   }
 
   return (
-    <Pressable
-      style={styles.fileChip}
-      onPress={() => {
-        void Linking.openURL(attachment.uri);
-      }}
-    >
-      <Text style={styles.fileChipLabel}>{language === 'zh' ? '文件' : 'FILE'}</Text>
-      <Text style={styles.fileName} numberOfLines={1}>
+    <Pressable style={styles.fileChip} onPress={handleOpenAttachment}>
+      <Text style={[styles.fileChipLabel, { color: theme.primary }]}>{language === 'zh' ? '文件' : 'FILE'}</Text>
+      <Text style={[styles.fileName, { color: theme.subtle }]} numberOfLines={1}>
         {attachment.name}
       </Text>
     </Pressable>
@@ -86,7 +191,7 @@ function prepareAssistantMarkdown(message: ChatMessage, language: UiLanguage): s
   return applyContentPlugins(message.text || '', { message, language, isUser: false });
 }
 
-function ThinkingIndicator({ language }: { language: UiLanguage }) {
+function ThinkingIndicator({ language, theme }: { language: UiLanguage; theme: AppTheme }) {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -114,7 +219,7 @@ function ThinkingIndicator({ language }: { language: UiLanguage }) {
 
   const textColor = progress.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: ['#2563EB', '#7C3AED', '#0891B2'],
+    outputRange: [theme.primary, theme.selectedText, theme.primary],
   });
   const shineTranslate = progress.interpolate({
     inputRange: [0, 1],
@@ -124,7 +229,7 @@ function ThinkingIndicator({ language }: { language: UiLanguage }) {
   return (
     <View style={styles.thinkingWrap}>
       <LinearGradient
-        colors={['#EFF6FF', '#F5F3FF', '#ECFEFF']}
+        colors={[theme.primarySoft, theme.surfaceAlt, theme.primarySoft]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={styles.thinkingPill}
@@ -144,37 +249,47 @@ function ThinkingIndicator({ language }: { language: UiLanguage }) {
 function MessageBubbleComponent({
   message,
   language,
-  colorScheme = 'light',
+  theme,
+  bubbleOpacity = 1,
   isStreaming = false,
   onRegenerate,
   onEditUserMessage,
   onSwitchVariant,
+  onOpenAttachment,
 }: Props) {
   const isUser = message.role === 'user';
-  const dark = colorScheme === 'dark';
-  const palette = dark
-    ? {
-        text: '#E5E7EB',
-        muted: '#94A3B8',
-        surface: '#111827',
-        surfaceAlt: '#1F2937',
-        border: '#334155',
-        userBubble: '#1E3A8A',
-        userBorder: '#2563EB',
-        selection: '#111827',
-        selectionAlt: '#1F2937',
-      }
-    : {
-        text: '#111827',
-        muted: '#334155',
-        surface: '#FFFFFF',
-        surfaceAlt: '#F8FAFC',
-        border: '#D8E0EA',
-        userBubble: '#DBEAFE',
-        userBorder: '#93C5FD',
-        selection: '#FFFFFF',
-        selectionAlt: '#F8FAFC',
-      };
+  const palette = {
+    text: theme.text,
+    muted: theme.muted,
+    subtle: theme.subtle,
+    surface: theme.surface,
+    surfaceAlt: theme.surfaceAlt,
+    border: theme.border,
+    primaryText: theme.composerButtonText,
+    assistantBubble: theme.assistantBubble,
+    assistantBorder: theme.assistantBorder,
+    userBubble: theme.userBubble,
+    userBorder: theme.userBorder,
+    selection: theme.surface,
+    selectionAlt: theme.surfaceAlt,
+    selectedBorder: theme.selectedBorder,
+  };
+  const assistantBubbleColor = useMemo(
+    () => withColorAlpha(palette.assistantBubble, bubbleOpacity),
+    [bubbleOpacity, palette.assistantBubble]
+  );
+  const assistantBorderColor = useMemo(
+    () => withColorAlpha(palette.assistantBorder, Math.min(1, bubbleOpacity + 0.12)),
+    [bubbleOpacity, palette.assistantBorder]
+  );
+  const userBubbleColor = useMemo(
+    () => withColorAlpha(palette.userBubble, bubbleOpacity),
+    [bubbleOpacity, palette.userBubble]
+  );
+  const userBorderColor = useMemo(
+    () => withColorAlpha(palette.userBorder, Math.min(1, bubbleOpacity + 0.12)),
+    [bubbleOpacity, palette.userBorder]
+  );
   const displayText = useMemo(
     () => (isUser ? message.text : prepareAssistantMarkdown(message, language)),
     [isUser, language, message]
@@ -194,10 +309,57 @@ function MessageBubbleComponent({
   const canRegenerate = !isUser && !!onRegenerate;
   const canEdit = isUser && !!onEditUserMessage && !isStreaming;
   const actionCopy = getMessageActionCopy(language);
+  const attachmentOpenFailedCopy =
+    language === 'zh' ? '这个本地附件暂时无法直接交给外部应用打开。' : 'This local attachment could not be handed off to another app right now.';
   const variantCount = isUser ? message.variants?.length ?? 0 : 0;
   const activeVariantIndex = Math.min(Math.max(message.activeVariantIndex ?? 0, 0), Math.max(0, variantCount - 1));
   const showThinking = !isUser && isStreaming && !message.error && displayText.trim().length === 0;
+  const imageAttachments = useMemo(
+    () => message.attachments.filter((attachment) => attachment.kind === 'image'),
+    [message.attachments]
+  );
+  const nonImageAttachments = useMemo(
+    () => message.attachments.filter((attachment) => attachment.kind !== 'image'),
+    [message.attachments]
+  );
+  const isImageOnlyMessage =
+    !editing &&
+    !message.error &&
+    !showThinking &&
+    displayText.trim().length === 0 &&
+    imageAttachments.length > 0 &&
+    nonImageAttachments.length === 0;
+  const isSplitImageTextMessage =
+    isUser &&
+    !editing &&
+    !message.error &&
+    !showThinking &&
+    displayText.trim().length > 0 &&
+    imageAttachments.length > 0 &&
+    nonImageAttachments.length === 0;
   const { lockDrawerGesture, unlockDrawerGesture } = useDrawerGesture();
+
+  function renderAttachmentList(attachments: AttachmentRecord[], imageOnly = false) {
+    return (
+      <View style={[styles.attachments, imageOnly && styles.attachmentsImageOnly]}>
+        {attachments.map((attachment) => (
+          <AttachmentPreview
+            key={attachment.id}
+            attachment={attachment}
+            language={language}
+            theme={theme}
+            onOpenAttachment={onOpenAttachment}
+            onOpenAttachmentFailed={() => {
+              Alert.alert(
+                language === 'zh' ? '打开附件失败' : 'Unable to open attachment',
+                attachmentOpenFailedCopy
+              );
+            }}
+          />
+        ))}
+      </View>
+    );
+  }
 
   useEffect(
     () => () => {
@@ -381,58 +543,81 @@ function MessageBubbleComponent({
         shouldCancelWhenOutside={false}
         onHandlerStateChange={handleBubbleLongPress}
       >
-        <View
-          style={[
-            styles.bubble,
-            isUser
-              ? [styles.userBubble, { backgroundColor: palette.userBubble, borderColor: palette.userBorder }]
-              : styles.assistantBubble,
-          ]}
-        >
-          {editing ? (
-            <View style={styles.editWrap}>
-              <TextInput
-                value={draftText}
-                onChangeText={setDraftText}
-                multiline
-                autoFocus
-                scrollEnabled
-                style={[styles.editInput, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }]}
-                textAlignVertical="top"
-              />
-              <View style={styles.editActions}>
-                <Pressable style={[styles.editGhostButton, { backgroundColor: palette.surfaceAlt, borderColor: palette.border }]} onPress={() => setEditing(false)}>
-                  <X size={16} color={palette.muted} strokeWidth={2.4} />
-                  <Text style={[styles.editGhostText, { color: palette.muted }]}>{actionCopy.cancel}</Text>
-                </Pressable>
-                <Pressable style={styles.editSendButton} onPress={submitEdit}>
-                  <Send size={16} color="#FFFFFF" strokeWidth={2.4} />
-                  <Text style={styles.editSendText}>{actionCopy.send}</Text>
-                </Pressable>
+        {isSplitImageTextMessage ? (
+          <View style={styles.bubbleGroup}>
+            <View
+              style={[
+                styles.bubble,
+                styles.imageOnlyBubble,
+                styles.userImageOnlyBubble,
+              ]}
+            >
+              {renderAttachmentList(imageAttachments, true)}
+            </View>
+            <View
+              style={[
+                styles.bubble,
+                styles.userBubble,
+                styles.splitTextBubble,
+                { backgroundColor: userBubbleColor, borderColor: userBorderColor },
+              ]}
+            >
+              <Text style={[styles.bodyText, { color: palette.text }]}>{displayText}</Text>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.bubble,
+              isImageOnlyMessage
+                ? [
+                    styles.imageOnlyBubble,
+                    isUser ? styles.userImageOnlyBubble : styles.assistantImageOnlyBubble,
+                  ]
+                : isUser
+                  ? [styles.userBubble, { backgroundColor: userBubbleColor, borderColor: userBorderColor }]
+                  : [styles.assistantBubble, { backgroundColor: assistantBubbleColor, borderColor: assistantBorderColor }],
+            ]}
+          >
+            {editing ? (
+              <View style={styles.editWrap}>
+                <TextInput
+                  value={draftText}
+                  onChangeText={setDraftText}
+                  multiline
+                  autoFocus
+                  scrollEnabled
+                  style={[styles.editInput, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }]}
+                  textAlignVertical="top"
+                />
+                <View style={styles.editActions}>
+                  <Pressable style={[styles.editGhostButton, { backgroundColor: palette.surfaceAlt, borderColor: palette.border }]} onPress={() => setEditing(false)}>
+                    <X size={16} color={palette.muted} strokeWidth={2.4} />
+                    <Text style={[styles.editGhostText, { color: palette.muted }]}>{actionCopy.cancel}</Text>
+                  </Pressable>
+                  <Pressable style={[styles.editSendButton, { backgroundColor: theme.composerButton }]} onPress={submitEdit}>
+                    <Send size={16} color={palette.primaryText} strokeWidth={2.4} />
+                    <Text style={[styles.editSendText, { color: palette.primaryText }]}>{actionCopy.send}</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          ) : isUser ? (
-            <Text style={[styles.bodyText, { color: palette.text }]}>{displayText}</Text>
-          ) : showThinking ? (
-            <ThinkingIndicator language={language} />
-          ) : (
-            <MarkdownRenderer
-              text={displayText}
-              deferCodeHighlight={isStreaming}
-              colorScheme={colorScheme}
-              onHorizontalGestureStart={lockDrawerGesture}
-              onHorizontalGestureEnd={unlockDrawerGesture}
-            />
-          )}
-          {message.attachments.length > 0 && (
-            <View style={styles.attachments}>
-              {message.attachments.map((attachment) => (
-                <AttachmentPreview key={attachment.id} attachment={attachment} language={language} />
-              ))}
-            </View>
-          )}
-          {!!message.error && <Text style={styles.errorText}>{message.error}</Text>}
-        </View>
+            ) : isUser ? (
+              <Text style={[styles.bodyText, { color: palette.text }]}>{displayText}</Text>
+            ) : showThinking ? (
+              <ThinkingIndicator language={language} theme={theme} />
+            ) : (
+              <MarkdownRenderer
+                text={displayText}
+                deferCodeHighlight={isStreaming}
+                colorScheme={theme.scheme}
+                onHorizontalGestureStart={lockDrawerGesture}
+                onHorizontalGestureEnd={unlockDrawerGesture}
+              />
+            )}
+            {message.attachments.length > 0 && renderAttachmentList(message.attachments, isImageOnlyMessage)}
+            {!!message.error && <Text style={styles.errorText}>{message.error}</Text>}
+          </View>
+        )}
       </LongPressGestureHandler>
 
       {variantCount > 1 && !editing && (
@@ -522,7 +707,7 @@ function MessageBubbleComponent({
               contentContainerStyle={styles.selectionTextContent}
               keyboardShouldPersistTaps="handled"
             >
-              <Text selectable selectionColor="#BFDBFE" style={[styles.selectionText, { color: palette.text }]}>
+              <Text selectable selectionColor={palette.selectedBorder} style={[styles.selectionText, { color: palette.text }]}>
                 {copyableText}
               </Text>
             </ScrollView>
@@ -538,11 +723,12 @@ export const MessageBubble = memo(
   (previous, next) =>
     previous.message === next.message &&
     previous.language === next.language &&
-    previous.colorScheme === next.colorScheme &&
+    previous.theme === next.theme &&
     previous.isStreaming === next.isStreaming &&
     previous.onRegenerate === next.onRegenerate &&
     previous.onEditUserMessage === next.onEditUserMessage &&
-    previous.onSwitchVariant === next.onSwitchVariant
+    previous.onSwitchVariant === next.onSwitchVariant &&
+    previous.onOpenAttachment === next.onOpenAttachment
 );
 
 const styles = StyleSheet.create({
@@ -555,6 +741,10 @@ const styles = StyleSheet.create({
   },
   rowAssistant: {
     alignItems: 'flex-start',
+  },
+  bubbleGroup: {
+    gap: 8,
+    alignItems: 'flex-end',
   },
   bubble: {
     maxWidth: '86%',
@@ -571,11 +761,26 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'stretch',
     maxWidth: '100%',
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  imageOnlyBubble: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     borderWidth: 0,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  userImageOnlyBubble: {
+    maxWidth: '82%',
+  },
+  assistantImageOnlyBubble: {
+    width: undefined,
+    alignSelf: 'flex-start',
+    maxWidth: '82%',
+  },
+  splitTextBubble: {
+    maxWidth: '86%',
   },
   bodyText: {
     color: '#111827',
@@ -586,10 +791,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 10,
   },
+  attachmentsImageOnly: {
+    marginTop: 0,
+  },
+  imageCard: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
   image: {
-    width: 180,
-    height: 140,
-    borderRadius: 18,
+    width: '100%',
+    height: '100%',
     backgroundColor: '#F1F5F9',
   },
   fileChip: {
@@ -601,13 +813,11 @@ const styles = StyleSheet.create({
     borderColor: '#D8E0EA',
   },
   fileChipLabel: {
-    color: '#2563EB',
     fontSize: 10,
     fontWeight: '800',
     marginBottom: 4,
   },
   fileName: {
-    color: '#334155',
     fontSize: 13,
   },
   errorText: {
@@ -690,10 +900,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: '#2563EB',
   },
   editSendText: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },

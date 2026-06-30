@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 class SharedImagePackage : ReactPackage {
+  @Suppress("OVERRIDE_DEPRECATION")
   override fun createNativeModules(reactContext: ReactApplicationContext): MutableList<NativeModule> =
     mutableListOf(SharedImageModule(reactContext), KeyboardInsetsModule(reactContext))
 

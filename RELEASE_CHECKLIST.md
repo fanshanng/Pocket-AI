@@ -9,6 +9,15 @@
 - 检查 `android/app/build.gradle` 的 `versionCode` 和 `versionName`。
 - 后续每次发布都要递增 `versionCode`。
 
+## 闭源发布模式
+
+- GitHub 仓库后续仅发布 Release，不再同步后续开发源码。
+- `E:\android\projects\ai-chat-pocket-git` 仍作为本地上传工作区，但默认只用于整理发布资料和核对版本一致性。
+- 只有在你明确决定更新公开仓库内容时，才允许 push 新的源码快照。
+- 如果准备恢复私有源码同步，先确认 GitHub 仓库已经切成私有，且当前机器的 SSH / Token 权限可正常访问远端后再 push。
+- 日常版本迭代仍在原项目目录完成；对外发布时，默认流程是更新 GitHub Release 页面、上传 APK、填写 release note。
+- 本地 `release-notes/`、`PROJECT_HANDOFF.md`、架构计划、签名备份等仍然保留，用于私有开发和回溯，不要求全部公开。
+
 ## 发布前验证
 
 ## Codex 辅助检查
@@ -105,6 +114,7 @@ android/app/build/outputs/apk/release/app-release.apk
 - 用户需要自备 API Key。
 - AI 输出可能不准确。
 - 本应用不是 OpenAI / DeepSeek 官方产品。
+- 如果仓库已切换为闭源发布模式，可直接说明“后续版本仅通过 GitHub Releases 分发 APK，不再公开同步源码更新”。
 
 ## 严禁上传
 

@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
-import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Maximize2, X } from 'lucide-react-native';
 
 type Props = {
@@ -118,7 +119,8 @@ const LANGUAGE_ACCENTS: Record<string, string> = {
 };
 
 const MAX_HIGHLIGHT_CHARS = 12000;
-const MONOSPACE_CHAR_WIDTH = 8.7;
+const ASCII_CHAR_WIDTH = 8.7;
+const WIDE_CHAR_WIDTH = 15.4;
 const MAX_ESTIMATED_CODE_WIDTH = 12000;
 
 const KEYWORDS: Record<string, Set<string>> = {
@@ -214,11 +216,39 @@ export function normalizeCodeLanguage(language?: string): string {
   return normalizeLanguage(language);
 }
 
+function isWideCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x115f) ||
+    (codePoint >= 0x2329 && codePoint <= 0x232a) ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+  );
+}
+
+function estimateLineWidth(line: string): number {
+  let width = 0;
+  for (const char of line) {
+    if (char === '\t') {
+      width += ASCII_CHAR_WIDTH * 4;
+      continue;
+    }
+    const codePoint = char.codePointAt(0) ?? 0;
+    width += isWideCodePoint(codePoint) ? WIDE_CHAR_WIDTH : ASCII_CHAR_WIDTH;
+  }
+  return width;
+}
+
 function estimateCodeContentWidth(code: string): number {
-  const longestLine = (code || ' ')
+  // Wide-character comments need a larger estimate so inline blocks stay scrollable instead of wrapping.
+  const longestLineWidth = (code || ' ')
     .split('\n')
-    .reduce((longest, line) => Math.max(longest, line.replace(/\t/g, '    ').length), 0);
-  return Math.min(MAX_ESTIMATED_CODE_WIDTH, Math.max(40, longestLine * MONOSPACE_CHAR_WIDTH + 24));
+    .reduce((longest, line) => Math.max(longest, estimateLineWidth(line)), 0);
+  return Math.min(MAX_ESTIMATED_CODE_WIDTH, Math.max(40, longestLineWidth + 24));
 }
 
 function PlainCode({ code, width, wrap }: { code: string; width?: number; wrap: boolean }) {
@@ -547,7 +577,7 @@ function CodeBlockComponent({
         </ScrollView>
       </View>
       <Modal visible={fullscreenVisible} animationType="fade" onRequestClose={() => setFullscreenVisible(false)}>
-        <SafeAreaView style={styles.fullscreenRoot}>
+        <SafeAreaView style={styles.fullscreenRoot} edges={['top', 'left', 'right', 'bottom']}>
           <View style={styles.fullscreenHeader}>
             <View style={styles.languageWrap}>
               <View style={[styles.languageDot, { backgroundColor: accentColor }]} />

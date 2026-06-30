@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import LegacyDrawerLayout, {
+  type DrawerLockMode as LegacyDrawerLockMode,
   type DrawerState as LegacyDrawerState,
   type DrawerType as LegacyDrawerType,
 } from 'react-native-gesture-handler/DrawerLayout';
 import ReanimatedDrawerLayout, {
+  DrawerLockMode as ReanimatedDrawerLockMode,
   DrawerKeyboardDismissMode as ReanimatedDrawerKeyboardDismissMode,
   DrawerPosition as ReanimatedDrawerPosition,
   DrawerState as ReanimatedDrawerState,
@@ -12,9 +14,14 @@ import ReanimatedDrawerLayout, {
 } from 'react-native-gesture-handler/ReanimatedDrawerLayout';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Menu, X } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { AppTheme } from '../theme';
 import type { UiLanguage } from '../types';
+import {
+  DrawerLabImageGestureExperiment,
+  DrawerLabImageGestureOverlay,
+} from './DrawerLabImageGestureExperiment';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 type DrawerEdgeMode = 'edge' | 'full';
@@ -35,8 +42,11 @@ type Props = {
 
 const ROWS = Array.from({ length: 18 }, (_, index) => index + 1);
 const LONG_FORMULA = String.raw`E = \sum_{i=1}^n \alpha_i x_i^2 + \prod_{j=1}^m \frac{a_j+b_j}{c_j+d_j} + \int_0^\infty e^{-t^2} dt`;
-const LONG_CODE =
-  "const gestureResult = drawerExperiment.withVeryLongIdentifierName.map((sample) => sample.dx > sample.dy * 1.35 ? 'drawer' : 'scroll');";
+const LONG_CODE = [
+  'const gestureResult = drawerExperiment.withVeryLongIdentifierName',
+  "  .map((sample) => sample.dx > sample.dy * 1.35 ? 'drawer' : 'scroll');",
+  'return gestureResult.join(", ");',
+].join('\n');
 const LEGACY_DRAWER_TYPES: Record<DrawerMotionMode, LegacyDrawerType> = {
   front: 'front',
   back: 'back',
@@ -56,26 +66,77 @@ const REANIMATED_STATE_LABELS: Record<ReanimatedDrawerState, DrawerStateLabel> =
 export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const drawerRef = useRef<DrawerControls | null>(null);
+  const horizontalLockCountRef = useRef(0);
+  const tableTouchBoundaryLockedRef = useRef(false);
   const [drawerEngine, setDrawerEngine] = useState<DrawerEngine>('legacy');
   const [drawerState, setDrawerState] = useState<DrawerStateLabel>('Idle');
   const [drawerProgress, setDrawerProgress] = useState(0);
   const [drawerType, setDrawerType] = useState<DrawerMotionMode>('slide');
   const [edgeMode, setEdgeMode] = useState<DrawerEdgeMode>('edge');
+  const [imageLabViewerVisible, setImageLabViewerVisible] = useState(false);
+  const [, setHorizontalLockVersion] = useState(0);
 
   const copy = language === 'zh' ? ZH_COPY : EN_COPY;
   const drawerWidth = Math.max(280, Math.round(Math.min(windowWidth * 0.82, 380)));
   const edgeWidth = edgeMode === 'full' ? windowWidth : Math.round(Math.min(72, Math.max(48, windowWidth * 0.12)));
+  const horizontalGestureLocked = horizontalLockCountRef.current > 0;
+  const imageLabInteractionLocked = horizontalGestureLocked || imageLabViewerVisible;
+  const legacyDrawerLockMode: LegacyDrawerLockMode = imageLabInteractionLocked
+    ? drawerProgress > 0.02
+      ? 'locked-open'
+      : 'locked-closed'
+    : 'unlocked';
+  const reanimatedDrawerLockMode = imageLabInteractionLocked
+    ? drawerProgress > 0.02
+      ? ReanimatedDrawerLockMode.LOCKED_OPEN
+      : ReanimatedDrawerLockMode.LOCKED_CLOSED
+    : ReanimatedDrawerLockMode.UNLOCKED;
 
   // Keep both drawer engines behind the same lab content so only the engine changes.
   const drawerKey = `${drawerEngine}-${drawerType}-${edgeMode}-${Math.round(windowWidth)}`;
-  const tableRows = useMemo(
-    () =>
-      ROWS.slice(0, 6).map((row) => ({
-        id: row,
-        cells: [`#${row}`, copy.tableCell, `x_${row}+y_${row}=z_${row}`, `long-column-${row}-abcdefghijklmnopqrstuvwxyz`],
-      })),
-    [copy.tableCell]
-  );
+  const tableMarkdown = useMemo(() => {
+    const lines = [
+      `| # | ${copy.tableCell} A | ${copy.tableCell} B | Formula | Long ID | Long Tail |`,
+      '| --- | --- | --- | --- | --- | --- |',
+    ];
+
+    for (const row of ROWS.slice(0, 6)) {
+      lines.push(
+        `| ${row} | ${copy.tableCell}-${row} | value-${row} | x_${row}+y_${row}=z_${row} | long-column-${row}-alpha | long-column-${row}-beta |`
+      );
+    }
+
+    return lines.join('\n');
+  }, [copy.tableCell]);
+
+  const lockHorizontalContent = useCallback(() => {
+    horizontalLockCountRef.current += 1;
+    setHorizontalLockVersion((value) => value + 1);
+  }, []);
+
+  const unlockHorizontalContent = useCallback(() => {
+    horizontalLockCountRef.current = Math.max(0, horizontalLockCountRef.current - 1);
+    setHorizontalLockVersion((value) => value + 1);
+  }, []);
+
+  // Match the production chat strategy more closely: keep table scrolling on the
+  // normal non-eager path, but lock the lab drawer as soon as the touch starts
+  // inside the table region so left-to-right swipes are not stolen by the drawer.
+  const lockTableTouchBoundary = useCallback(() => {
+    if (tableTouchBoundaryLockedRef.current) {
+      return;
+    }
+    tableTouchBoundaryLockedRef.current = true;
+    lockHorizontalContent();
+  }, [lockHorizontalContent]);
+
+  const unlockTableTouchBoundary = useCallback(() => {
+    if (!tableTouchBoundaryLockedRef.current) {
+      return;
+    }
+    tableTouchBoundaryLockedRef.current = false;
+    unlockHorizontalContent();
+  }, [unlockHorizontalContent]);
 
   if (!visible) {
     return null;
@@ -112,6 +173,15 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
   const handleDrawerTypeChange = (type: DrawerMotionMode) => {
     resetDrawerTelemetry();
     setDrawerType(type);
+  };
+
+  const openImageLabViewer = () => {
+    drawerRef.current?.closeDrawer();
+    setImageLabViewerVisible(true);
+  };
+
+  const closeImageLabViewer = () => {
+    setImageLabViewerVisible(false);
   };
 
   // Both drawer implementations expose the same open/close surface for the lab controls.
@@ -278,7 +348,17 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
             ))}
           </View>
           <Text style={[styles.helpText, { color: theme.muted }]}>{copy.motionHint(drawerType)}</Text>
+          <Text style={[styles.helpText, { color: theme.muted }]}>{copy.riskyGestureRule}</Text>
         </View>
+
+        <DrawerLabImageGestureExperiment
+          theme={theme}
+          title={copy.imageGestureTitle}
+          description={copy.imageGestureDescription}
+          openLabel={copy.imageGestureOpen}
+          idleLabel={copy.imageGestureIdle}
+          onOpen={openImageLabViewer}
+        />
 
         <View style={[styles.messageBubble, { backgroundColor: theme.userBubble, borderColor: theme.userBorder }]}>
           <Text style={[styles.messageText, { color: theme.text }]}>{copy.messageIntro}</Text>
@@ -286,33 +366,38 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
 
         <View style={[styles.panel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
           <Text style={[styles.panelTitle, { color: theme.text }]}>{copy.tableTitle}</Text>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-            <View style={styles.table}>
-              {tableRows.map((row) => (
-                <View key={row.id} style={[styles.tableRow, { borderBottomColor: theme.border }]}>
-                  {row.cells.map((cell) => (
-                    <Text key={cell} style={[styles.tableCell, { color: theme.text, borderRightColor: theme.border }]}>
-                      {cell}
-                    </Text>
-                  ))}
-                </View>
-              ))}
-            </View>
-          </ScrollView>
+          <View
+            style={styles.markdownPreview}
+            onTouchStart={lockTableTouchBoundary}
+            onTouchEnd={unlockTableTouchBoundary}
+            onTouchCancel={unlockTableTouchBoundary}
+          >
+            <MarkdownRenderer
+              text={tableMarkdown}
+              colorScheme={theme.scheme}
+              onHorizontalGestureStart={lockHorizontalContent}
+              onHorizontalGestureEnd={unlockHorizontalContent}
+            />
+          </View>
         </View>
 
         <View style={[styles.panel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
           <Text style={[styles.panelTitle, { color: theme.text }]}>{copy.formulaTitle}</Text>
           <View style={styles.mathPreview}>
-            <MarkdownRenderer text={`$$\n${LONG_FORMULA}\n$$`} colorScheme={theme.scheme} />
+            <MarkdownRenderer
+              text={`$$\n${LONG_FORMULA}\n$$`}
+              colorScheme={theme.scheme}
+              onHorizontalGestureStart={lockHorizontalContent}
+              onHorizontalGestureEnd={unlockHorizontalContent}
+            />
           </View>
         </View>
 
         <View style={[styles.panel, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
           <Text style={[styles.panelTitle, { color: theme.text }]}>{copy.codeTitle}</Text>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
-            <Text style={[styles.monoBlock, { color: theme.subtle }]}>{LONG_CODE}</Text>
-          </ScrollView>
+          <View style={styles.codeSampleWrap}>
+            <Text style={[styles.monoBlock, styles.monoBlockWrapped, { color: theme.subtle }]}>{LONG_CODE}</Text>
+          </View>
         </View>
 
         {ROWS.slice(6).map((item) => (
@@ -327,51 +412,68 @@ export function DrawerGestureLab({ language, theme, visible, onClose }: Props) {
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <GestureHandlerRootView style={[styles.root, { backgroundColor: theme.surface }]}>
-        <SafeAreaView style={styles.root}>
-          {drawerEngine === 'legacy' ? (
-            <LegacyDrawerLayout
-              key={drawerKey}
-              ref={setDrawerInstance}
-              drawerPosition="left"
-              drawerType={LEGACY_DRAWER_TYPES[drawerType]}
-              drawerWidth={drawerWidth}
-              edgeWidth={edgeWidth}
-              minSwipeDistance={8}
-              overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
-              drawerBackgroundColor={theme.surface}
-              keyboardDismissMode="none"
-              useNativeAnimations
-              onDrawerStateChanged={handleLegacyStateChange}
-              onDrawerSlide={handleDrawerSlide}
-              onDrawerOpen={() => setDrawerProgress(1)}
-              onDrawerClose={() => setDrawerProgress(0)}
-              renderNavigationView={renderNavigationView}
-            >
-              {renderLabContent()}
-            </LegacyDrawerLayout>
-          ) : (
-            <ReanimatedDrawerLayout
-              key={drawerKey}
-              ref={setDrawerInstance}
-              drawerPosition={ReanimatedDrawerPosition.LEFT}
-              drawerType={REANIMATED_DRAWER_TYPES[drawerType]}
-              drawerWidth={drawerWidth}
-              edgeWidth={edgeWidth}
-              minSwipeDistance={8}
-              overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
-              drawerBackgroundColor={theme.surface}
-              keyboardDismissMode={ReanimatedDrawerKeyboardDismissMode.NONE}
-              animationSpeed={16}
-              onDrawerStateChanged={handleReanimatedStateChange}
-              onDrawerSlide={handleDrawerSlide}
-              onDrawerOpen={() => setDrawerProgress(1)}
-              onDrawerClose={() => setDrawerProgress(0)}
-              renderNavigationView={renderNavigationView}
-            >
-              {renderLabContent()}
-            </ReanimatedDrawerLayout>
-          )}
+      <GestureHandlerRootView
+        style={[styles.root, { backgroundColor: theme.surface }]}
+        unstable_forceActive
+      >
+        <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
+          <View style={styles.root}>
+            {imageLabViewerVisible ? (
+              <DrawerLabImageGestureOverlay
+                visible
+                theme={theme}
+                closeLabel={copy.imageGestureClose}
+                resetLabel={copy.imageGestureReset}
+                idleLabel={copy.imageGestureIdle}
+                activeLabel={copy.imageGestureActive}
+                onClose={closeImageLabViewer}
+              />
+            ) : drawerEngine === 'legacy' ? (
+              <LegacyDrawerLayout
+                key={drawerKey}
+                ref={setDrawerInstance}
+                drawerPosition="left"
+                drawerType={LEGACY_DRAWER_TYPES[drawerType]}
+                drawerWidth={drawerWidth}
+                edgeWidth={edgeWidth}
+                minSwipeDistance={8}
+                drawerLockMode={legacyDrawerLockMode}
+                overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
+                drawerBackgroundColor={theme.surface}
+                keyboardDismissMode="none"
+                useNativeAnimations
+                onDrawerStateChanged={handleLegacyStateChange}
+                onDrawerSlide={handleDrawerSlide}
+                onDrawerOpen={() => setDrawerProgress(1)}
+                onDrawerClose={() => setDrawerProgress(0)}
+                renderNavigationView={renderNavigationView}
+              >
+                {renderLabContent()}
+              </LegacyDrawerLayout>
+            ) : (
+              <ReanimatedDrawerLayout
+                key={drawerKey}
+                ref={setDrawerInstance}
+                drawerPosition={ReanimatedDrawerPosition.LEFT}
+                drawerType={REANIMATED_DRAWER_TYPES[drawerType]}
+                drawerWidth={drawerWidth}
+                edgeWidth={edgeWidth}
+                minSwipeDistance={8}
+                drawerLockMode={reanimatedDrawerLockMode}
+                overlayColor={theme.scheme === 'dark' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.22)'}
+                drawerBackgroundColor={theme.surface}
+                keyboardDismissMode={ReanimatedDrawerKeyboardDismissMode.NONE}
+                animationSpeed={16}
+                onDrawerStateChanged={handleReanimatedStateChange}
+                onDrawerSlide={handleDrawerSlide}
+                onDrawerOpen={() => setDrawerProgress(1)}
+                onDrawerClose={() => setDrawerProgress(0)}
+                renderNavigationView={renderNavigationView}
+              >
+                {renderLabContent()}
+              </ReanimatedDrawerLayout>
+            )}
+          </View>
         </SafeAreaView>
       </GestureHandlerRootView>
     </Modal>
@@ -389,6 +491,14 @@ const ZH_COPY = {
   state: (state: DrawerStateLabel, progress: string) => `状态：${state} · ${progress}`,
   modeTitle: '手势模式',
   modeIntro: '顶部菜单按钮只测试打开动画；真正的差异请用手指从不同起点右滑，并切换不同抽屉引擎测试。',
+  riskyGestureRule: '包括图片缩放在内的高风险手势，先在实验室隔离验证，再接回正式聊天页。',
+  imageGestureTitle: '图片缩放实验',
+  imageGestureDescription: '这里继续收窄风险：设置页缩略图只负责点击打开；进入全屏后会先脱离 Drawer 和滚动宿主，只保留最小手势面板，再验证双指缩放、拖动和轻点关闭。',
+  imageGestureOpen: '点按全屏查看',
+  imageGestureReset: '重置',
+  imageGestureIdle: '待缩放',
+  imageGestureActive: '已放大',
+  imageGestureClose: '关闭图片实验',
   engineMetric: '引擎',
   edgeMetric: '起点',
   motionMetric: '运动',
@@ -443,6 +553,14 @@ const EN_COPY = {
   state: (state: DrawerStateLabel, progress: string) => `State: ${state} · ${progress}`,
   modeTitle: 'Gesture mode',
   modeIntro: 'The menu button only tests open animation; real differences should be checked by changing the drawer engine and swiping from different start points.',
+  riskyGestureRule: 'Keep higher-risk gestures, including image zoom, isolated in the lab before wiring them back into the real chat screen.',
+  imageGestureTitle: 'Image zoom lab',
+  imageGestureDescription: 'This sample keeps the inline card tap-only and now detaches the fullscreen image test from the drawer/scroll host entirely, leaving a minimal gesture surface for pinch, pan, and tap-to-close validation.',
+  imageGestureOpen: 'Open fullscreen',
+  imageGestureReset: 'Reset',
+  imageGestureIdle: 'Idle',
+  imageGestureActive: 'Zoomed',
+  imageGestureClose: 'Close image lab',
   engineMetric: 'Engine',
   edgeMetric: 'Start',
   motionMetric: 'Motion',
@@ -679,38 +797,25 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontWeight: '700',
   },
-  table: {
-    minWidth: 820,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-  },
-  tableCell: {
-    width: 205,
-    borderRightWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  monoLine: {
-    minWidth: 980,
-    fontFamily: 'monospace',
-    fontSize: 14,
-    lineHeight: 22,
-    fontWeight: '700',
+  markdownPreview: {
+    width: '100%',
   },
   mathPreview: {
     minHeight: 42,
   },
+  codeSampleWrap: {
+    width: '100%',
+    overflow: 'hidden',
+  },
   monoBlock: {
-    minWidth: 920,
     fontFamily: 'monospace',
     fontSize: 13,
     lineHeight: 21,
     fontWeight: '700',
+  },
+  monoBlockWrapped: {
+    width: '100%',
+    flexShrink: 1,
   },
   feedItem: {
     borderWidth: 1,

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { X } from 'lucide-react-native';
+import { FileText, X } from 'lucide-react-native';
 
 import type { AppTheme } from '../theme';
 import type { PendingAttachment } from '../types';
@@ -8,7 +8,6 @@ import type { PendingAttachment } from '../types';
 type Props = {
   attachments: PendingAttachment[];
   theme: AppTheme;
-  formatMeta: (attachment: PendingAttachment) => string;
   onOpenAttachment: (attachment: PendingAttachment) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   removeAccessibilityLabel: string;
@@ -17,7 +16,6 @@ type Props = {
 function PendingAttachmentBarComponent({
   attachments,
   theme,
-  formatMeta,
   onOpenAttachment,
   onRemoveAttachment,
   removeAccessibilityLabel,
@@ -26,7 +24,7 @@ function PendingAttachmentBarComponent({
     return null;
   }
 
-  // Keep attachment state and cleanup in App.tsx; this component is only a reusable composer preview rail.
+  // Keep attachment state in App.tsx; this rail only renders compact, preview-first attachment chips.
   return (
     <ScrollView
       horizontal
@@ -36,22 +34,24 @@ function PendingAttachmentBarComponent({
       {attachments.map((attachment) => (
         <Pressable
           key={attachment.id}
-          style={[styles.chip, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+          style={[styles.tile, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
           onPress={() => onOpenAttachment(attachment)}
         >
-          {attachment.kind === 'image' && (
+          {attachment.kind === 'image' ? (
             <Image source={{ uri: attachment.uri }} style={styles.thumb} />
+          ) : (
+            <View style={styles.fileTile}>
+              <FileText size={24} color={theme.primary} strokeWidth={2.2} />
+              <Text style={[styles.fileTileLabel, { color: theme.primary }]} numberOfLines={1}>
+                FILE
+              </Text>
+              <Text style={[styles.fileTileName, { color: theme.subtle }]} numberOfLines={1}>
+                {attachment.name}
+              </Text>
+            </View>
           )}
-          <View style={styles.body}>
-            <Text style={[styles.type, { color: theme.primary }]} numberOfLines={1}>
-              {formatMeta(attachment)}
-            </Text>
-            <Text style={[styles.name, { color: theme.subtle }]} numberOfLines={1}>
-              {attachment.name}
-            </Text>
-          </View>
           <Pressable
-            style={[styles.removeButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+            style={styles.removeButton}
             onPress={(event) => {
               event.stopPropagation();
               onRemoveAttachment(attachment.id);
@@ -59,7 +59,7 @@ function PendingAttachmentBarComponent({
             accessibilityRole="button"
             accessibilityLabel={removeAccessibilityLabel}
           >
-            <X size={13} color={theme.muted} strokeWidth={2.5} />
+            <X size={12} color="#F8FAFC" strokeWidth={2.8} />
           </Pressable>
         </Pressable>
       ))}
@@ -71,45 +71,54 @@ export const PendingAttachmentBar = memo(PendingAttachmentBarComponent);
 
 const styles = StyleSheet.create({
   rail: {
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 2,
+    paddingTop: 2,
     paddingBottom: 8,
   },
-  chip: {
-    width: 214,
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 13,
+  tile: {
+    width: 82,
+    height: 82,
+    borderRadius: 22,
+    overflow: 'hidden',
     borderWidth: 1,
+    position: 'relative',
   },
   thumb: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
+    width: '100%',
+    height: '100%',
     backgroundColor: '#E2E8F0',
   },
-  body: {
+  fileTile: {
     flex: 1,
-    minWidth: 0,
-  },
-  type: {
-    fontSize: 10,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  name: {
-    fontSize: 13,
-  },
-  removeButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.38)',
+  },
+  fileTileLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  fileTileName: {
+    marginTop: 3,
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.72)',
   },
 });

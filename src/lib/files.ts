@@ -1,13 +1,27 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Alert } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 import type { AttachmentRecord, PendingAttachment } from '../types';
 import { makeId } from './ids';
 
 const ROOT_DIR = `${FileSystem.documentDirectory}ai-chat-pocket/`;
 const ATTACHMENT_DIR = `${ROOT_DIR}attachments/`;
+const CHAT_BACKGROUND_DIR = `${ROOT_DIR}chat-backgrounds/`;
+const ANDROID_PACKAGE_NAME = 'com.fanshanng.aichatpocket';
+const ANDROID_DATABASE_DIR = `file:///data/user/0/${ANDROID_PACKAGE_NAME}/databases/`;
+const ANDROID_DATABASE_DIR_FALLBACK = `file:///data/data/${ANDROID_PACKAGE_NAME}/databases/`;
+const ASYNC_STORAGE_DB_FILE_NAMES = [
+  'AsyncStorage',
+  'AsyncStorage-wal',
+  'AsyncStorage-shm',
+  'AsyncStorage-journal',
+  'RKStorage',
+  'RKStorage-wal',
+  'RKStorage-shm',
+  'RKStorage-journal',
+] as const;
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 // Keep attachment size failures typed so UI code can localize them without
@@ -47,6 +61,245 @@ export type AttachmentCacheStats = {
   referencedFileCount: number;
   referencedTotalBytes: number;
 };
+
+export type ExportedUserFile = {
+  directoryUri: string;
+  fileName: string;
+  fileUri: string;
+};
+
+export type RawChatStorageBackup = {
+  directoryUri: string;
+  folderName: string;
+  folderUri: string;
+  fileNames: string[];
+  manifestUri: string | null;
+};
+
+function padNumber(value: number): string {
+  return value < 10 ? `0${value}` : String(value);
+}
+
+function buildTimestampLabel(date = new Date()): string {
+  return [
+    date.getFullYear(),
+    padNumber(date.getMonth() + 1),
+    padNumber(date.getDate()),
+  ].join('') + `-${padNumber(date.getHours())}${padNumber(date.getMinutes())}${padNumber(date.getSeconds())}`;
+}
+
+function buildTimestampedFileName(baseName: string, extension: string): string {
+  const safeBaseName = sanitizeName(baseName) || 'pocket-ai-export';
+  const safeExtension = extension.replace(/^\./, '').trim() || 'txt';
+  return `${safeBaseName}-${buildTimestampLabel()}.${safeExtension}`;
+}
+
+async function ensureRootDir(): Promise<void> {
+  await FileSystem.makeDirectoryAsync(ROOT_DIR, { intermediates: true }).catch(() => undefined);
+}
+
+async function pickExportDirectory(initialFileUrl?: string | null): Promise<string | null> {
+  if (Platform.OS !== 'android') {
+    await ensureRootDir();
+    return ROOT_DIR;
+  }
+
+  const preferredInitialUri =
+    initialFileUrl ?? FileSystem.StorageAccessFramework.getUriForDirectoryInRoot('Download');
+  const permission = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(preferredInitialUri);
+  return permission.granted ? permission.directoryUri : null;
+}
+
+async function writeTextExportFile(
+  directoryUri: string,
+  fileName: string,
+  mimeType: string,
+  content: string
+): Promise<ExportedUserFile> {
+  if (Platform.OS !== 'android') {
+    const fileUri = `${directoryUri}${fileName}`;
+    await FileSystem.writeAsStringAsync(fileUri, content, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return {
+      directoryUri,
+      fileName,
+      fileUri,
+    };
+  }
+
+  const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(directoryUri, fileName, mimeType);
+  await FileSystem.writeAsStringAsync(fileUri, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  return {
+    directoryUri,
+    fileName,
+    fileUri,
+  };
+}
+
+async function copyLocalFileToSafDirectory(
+  parentUri: string,
+  sourceUri: string,
+  targetName: string,
+  mimeType: string
+): Promise<string> {
+  const targetUri = await FileSystem.StorageAccessFramework.createFileAsync(parentUri, targetName, mimeType);
+  try {
+    await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+  } catch {
+    const base64 = await FileSystem.readAsStringAsync(sourceUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await FileSystem.writeAsStringAsync(targetUri, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  }
+  return targetUri;
+}
+
+function getRawAsyncStorageBackupCandidates(): string[] {
+  if (Platform.OS !== 'android') {
+    return [];
+  }
+
+  const roots = [ANDROID_DATABASE_DIR, ANDROID_DATABASE_DIR_FALLBACK];
+  const candidates = roots.flatMap((root) =>
+    ASYNC_STORAGE_DB_FILE_NAMES.map((fileName) => `${root}${fileName}`)
+  );
+  return [...new Set(candidates)];
+}
+
+export function getChatRecordsLocationUri(): string {
+  return Platform.OS === 'android' ? ANDROID_DATABASE_DIR : ROOT_DIR;
+}
+
+export function getAttachmentCacheLocationUri(): string {
+  return ATTACHMENT_DIR;
+}
+
+export async function openPrivateLocation(uri: string): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+  if (!info?.exists) {
+    return false;
+  }
+
+  try {
+    if (Platform.OS === 'android') {
+      const contentUri = await FileSystem.getContentUriAsync(uri);
+      await Linking.openURL(contentUri);
+      return true;
+    }
+
+    await Linking.openURL(uri);
+    return true;
+  } catch {
+    try {
+      await Linking.openURL(uri);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export async function openPrivateFile(uri: string): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+  if (!info?.exists) {
+    return false;
+  }
+
+  try {
+    if (Platform.OS === 'android') {
+      const contentUri = await FileSystem.getContentUriAsync(uri);
+      await Linking.openURL(contentUri);
+      return true;
+    }
+
+    await Linking.openURL(uri);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function exportTextFileToUserDirectory(input: {
+  suggestedBaseName: string;
+  extension: string;
+  mimeType: string;
+  content: string;
+  initialDirectoryUri?: string | null;
+}): Promise<ExportedUserFile | null> {
+  const directoryUri = await pickExportDirectory(input.initialDirectoryUri);
+  if (!directoryUri) {
+    return null;
+  }
+
+  const fileName = buildTimestampedFileName(input.suggestedBaseName, input.extension);
+  return writeTextExportFile(directoryUri, fileName, input.mimeType, input.content);
+}
+
+export async function exportRawChatStorageBackupToUserDirectory(input?: {
+  initialDirectoryUri?: string | null;
+  manifestLines?: string[];
+}): Promise<RawChatStorageBackup | null> {
+  const sourceUris = (
+    await Promise.all(
+      getRawAsyncStorageBackupCandidates().map(async (uri) => {
+        const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+        return info?.exists ? uri : null;
+      })
+    )
+  ).filter((uri): uri is string => uri !== null);
+
+  if (sourceUris.length === 0) {
+    return null;
+  }
+
+  const directoryUri = await pickExportDirectory(input?.initialDirectoryUri);
+  if (!directoryUri) {
+    return null;
+  }
+
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+
+  const folderName = `pocket-ai-recovery-${buildTimestampLabel()}`;
+  const folderUri = await FileSystem.StorageAccessFramework.makeDirectoryAsync(directoryUri, folderName);
+  const fileNames: string[] = [];
+
+  for (const sourceUri of sourceUris) {
+    const fileName = sourceUri.split('/').pop() || `backup-${fileNames.length + 1}.bin`;
+    await copyLocalFileToSafDirectory(folderUri, sourceUri, fileName, 'application/octet-stream');
+    fileNames.push(fileName);
+  }
+
+  const manifestLines = [
+    'Pocket AI raw local chat storage backup',
+    `Exported at: ${new Date().toISOString()}`,
+    `Database directory: ${getChatRecordsLocationUri()}`,
+    'These files are a raw AsyncStorage backup for recovery/debugging.',
+    'They are not imported automatically by the current app version.',
+    ...(input?.manifestLines ?? []),
+  ];
+
+  const manifest = await writeTextExportFile(
+    folderUri,
+    'README.txt',
+    'text/plain',
+    manifestLines.join('\n')
+  ).catch(() => null);
+
+  return {
+    directoryUri,
+    folderName,
+    folderUri,
+    fileNames,
+    manifestUri: manifest?.fileUri ?? null,
+  };
+}
 
 function sanitizeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -101,6 +354,10 @@ async function ensureAttachmentDir(): Promise<void> {
   await FileSystem.makeDirectoryAsync(ATTACHMENT_DIR, { intermediates: true });
 }
 
+async function ensureChatBackgroundDir(): Promise<void> {
+  await FileSystem.makeDirectoryAsync(CHAT_BACKGROUND_DIR, { intermediates: true });
+}
+
 function dedupeAttachmentUris(attachments: AttachmentRecord[]): string[] {
   return [...new Set(attachments.map((attachment) => attachment.uri).filter(Boolean))];
 }
@@ -116,6 +373,86 @@ export async function deleteAttachmentRecords(attachments: AttachmentRecord[]): 
 
 export async function clearAllAttachmentFiles(): Promise<void> {
   await FileSystem.deleteAsync(ROOT_DIR, { idempotent: true }).catch(() => undefined);
+}
+
+export async function clearAttachmentCacheFiles(): Promise<void> {
+  await FileSystem.deleteAsync(ATTACHMENT_DIR, { idempotent: true }).catch(() => undefined);
+}
+
+async function sweepChatBackgroundFiles(keepUri: string | null = null): Promise<void> {
+  const directoryInfo = await FileSystem.getInfoAsync(CHAT_BACKGROUND_DIR).catch(() => null);
+  if (!directoryInfo?.exists) {
+    return;
+  }
+
+  const fileNames = await FileSystem.readDirectoryAsync(CHAT_BACKGROUND_DIR).catch(() => []);
+  const deletions = fileNames
+    .map((name) => `${CHAT_BACKGROUND_DIR}${name}`)
+    .filter((uri) => uri !== keepUri)
+    .map((uri) => FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined));
+
+  await Promise.all(deletions);
+}
+
+// Keep appearance assets outside the attachment cache directory so custom chat
+// backgrounds do not affect attachment stats or attachment export boundaries.
+export async function deleteChatBackgroundImage(uri: string | null | undefined): Promise<void> {
+  if (uri) {
+    await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+  }
+  await sweepChatBackgroundFiles(null);
+}
+
+export async function persistChatBackgroundImage(
+  input: {
+    uri: string;
+    name?: string | null;
+    mimeType?: string | null;
+  },
+  previousUri: string | null = null
+): Promise<string> {
+  await ensureChatBackgroundDir();
+  const extension = extensionFromMime(input.mimeType);
+  const fileName = `chat-background-${Date.now()}${extension}`;
+  const destination = `${CHAT_BACKGROUND_DIR}${fileName}`;
+  await FileSystem.copyAsync({ from: input.uri, to: destination });
+
+  if (previousUri && previousUri !== destination) {
+    await FileSystem.deleteAsync(previousUri, { idempotent: true }).catch(() => undefined);
+  }
+  await sweepChatBackgroundFiles(destination);
+  return destination;
+}
+
+export async function pickChatBackgroundImage(previousUri: string | null = null): Promise<string | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert('Permission needed', 'Photo library access is required to choose a chat background.');
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [9, 16],
+    allowsMultipleSelection: false,
+    base64: false,
+    quality: 0.92,
+  });
+
+  if (result.canceled || !result.assets?.[0]) {
+    return null;
+  }
+
+  const asset = result.assets[0];
+  return persistChatBackgroundImage(
+    {
+      uri: asset.uri,
+      name: asset.fileName || `chat-background-${Date.now()}.jpg`,
+      mimeType: asset.mimeType || 'image/jpeg',
+    },
+    previousUri
+  );
 }
 
 export async function sweepOrphanedAttachments(attachmentsToKeep: AttachmentRecord[]): Promise<void> {

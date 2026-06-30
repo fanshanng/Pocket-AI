@@ -10,6 +10,7 @@ export const DEFAULT_PROFILE: ApiProfile = {
   organization: '',
   systemPrompt: '',
   reasoningEffort: 'xhigh',
+  webSearchEnabled: true,
   cachedModels: ['gpt-5.4'],
   cachedReasoningEfforts: ['high', 'xhigh'],
   storeResponses: false,
